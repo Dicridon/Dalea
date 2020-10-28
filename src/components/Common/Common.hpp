@@ -5,10 +5,10 @@
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/transaction.hpp>
 
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <vector>
-#include <shared_mutex>
-#include <mutex>
 namespace Dalea
 {
     using String = std::string;
@@ -27,21 +27,22 @@ namespace Dalea
         Retry,
     };
 
-    const int BUCKET_SIZE = 10;
-    const int META_BITS = 4;
-    const int BUCKET_BTIS = 10;
-    const int SEG_SIZE = (1 << BUCKET_BTIS);
-    const int SUBDIR_SIZE = (1 << 16);
-    const int METADIR_SIZE = (1 << 4);
+    constexpr int BUCKET_SIZE = 10;
+    constexpr int META_BITS = 4;
+    constexpr int BUCKET_BTIS = 10;
+    constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BTIS);
+    constexpr int SUBDIR_SIZE = (1 << 16);
+    constexpr int METADIR_SIZE = (1 << 4);
 
-    struct HashValue {
+    struct HashValue
+    {
         uint64_t hash_value;
         // zero is an invalid hash value for it would be used as fingerprint
-        HashValue() : hash_value(0) {};
-        HashValue(uint64_t hv) : hash_value(hv == 0 ? hv + 1 : hv) {};
-        HashValue(const HashValue& h) = default;
-        HashValue(HashValue&& h) = default;
-        HashValue & operator=(const HashValue &h) = default;
+        HashValue() : hash_value(0){};
+        HashValue(uint64_t hv) : hash_value(hv == 0 ? hv + 1 : hv){};
+        HashValue(const HashValue &h) = default;
+        HashValue(HashValue &&h) = default;
+        HashValue &operator=(const HashValue &h) = default;
         ~HashValue() = default;
 
         uint64_t SegmentBits(uint64_t depth) const noexcept;
