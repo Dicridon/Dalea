@@ -1,0 +1,15 @@
+./src/Dalea.hpp: 
+./src/Dalea.cpp: ./src/Dalea.hpp
+./src/main.cpp: 
+./src/components/Segment/Segment.hpp: 
+./src/components/Segment/Segment.cpp: ./src/components/Segment/Segment.hpp
+./src/components/HashTable/HashTable.cpp: ./src/components/HashTable/HashTable.hpp
+./src/components/HashTable/HashTable.hpp: 
+./src/components/Directory/Directory.cpp: ./src/components/Directory/Directory.hpp
+./src/components/Directory/Directory.hpp: 
+./src/components/KVPair/KVPair.cpp: ./src/components/KVPair/KVPair.hpp
+./src/components/KVPair/KVPair.hpp: ./src/components/Common/Common.hpp
+./src/components/Bucket/Bucket.hpp: ./src/components/KVPair/KVPair.hpp
+./src/components/Bucket/Bucket.cpp: ./src/components/Bucket/Bucket.hpp
+./src/components/Common/Common.hpp: 
+./src/components/Common/Common.cpp: ./src/components/Common/Common.hpp
