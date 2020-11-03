@@ -50,11 +50,7 @@ namespace Dalea
                 meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop);
             });
         }
-        if (meta.subdirectories[sub]->segments[seg] == nullptr)
-        {
-            meta.subdirectories[sub]->segments[sub] = ptr;
-            return true;
-        }
+        meta.subdirectories[sub]->segments[seg] = ptr;
         return false;
     }
 
@@ -68,5 +64,21 @@ namespace Dalea
     bool Directory::Probe(const HashValue &hv) const noexcept
     {
         return Probe(hv.GetRaw());
+    }
+
+    void Directory::DoublingLink(uint64_t prev_depth, uint64_t new_depth) noexcept
+    {
+        auto start = (1UL << prev_depth); 
+        auto end = (1UL << new_depth);
+        for(auto i = start; i < end; i++)
+        {
+            // this buddy is the older buddy
+            auto buddy = i - start;
+            auto buddy_sub = buddy / SUBDIR_SIZE;
+            auto buddy_seg = buddy % SUBDIR_SIZE;
+            auto sub = i / SUBDIR_SIZE;
+            auto seg = i % SUBDIR_SIZE;
+            meta.subdirectories[sub]->segments[seg] = meta.subdirectories[buddy_sub]->segments[buddy_seg];
+        }
     }
 } // namespace Dalea

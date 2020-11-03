@@ -16,7 +16,7 @@ namespace Dalea
          */
         ~Bucket() = default;
 
-        KVPairPtr Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux, uint64_t segno) const noexcept;
+        KVPairPtr Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
         FunctionStatus Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, std::shared_mutex &mux, uint64_t segno) noexcept;
         FunctionStatus Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
 

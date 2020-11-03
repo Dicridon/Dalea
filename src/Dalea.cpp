@@ -7,6 +7,12 @@ namespace Dalea
     RETRY:
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
+
+        if (bkt->HasAncestor())
+        {
+            seg = dir.GetSegment(bkt->GetAncestor());
+            bkt = &seg->buckets[hv.BucketBits()];
+        }
         
         std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
@@ -34,7 +40,13 @@ namespace Dalea
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
         auto seg = dir.GetSegment(hv, depth);
-        return seg->buckets[hv.BucketBits()].Get(key, hv, seg->locks[hv.BucketBits()], seg->segment_no);
+        auto bkt = &seg->buckets[hv.BucketBits()];
+        if (bkt->HasAncestor())
+        {
+            seg = dir.GetSegment(bkt->GetAncestor());
+            bkt = &seg->buckets[hv.BucketBits()];
+        }
+        return bkt->Get(key, hv, seg->locks[hv.BucketBits()]);
     }
 
     FunctionStatus HashTable::Remove(PoolBase &pop, std::string &key, std::string &value) noexcept
@@ -47,7 +59,7 @@ namespace Dalea
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
-            simple_split(pop, bkt, key, value, hv, segno);
+            simple_split(pop, bkt, key, value, hv, segno, false);
         }
         else
         {
@@ -76,13 +88,19 @@ namespace Dalea
      *  concurrent sweep seems to be viable, for each thread touches different kvs, ther is no conflicts
      *  but should ensure the correctness of global depth after a crash
      */
-    void HashTable::simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno) noexcept
+    void HashTable::simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
         auto prev_depth = bkt.GetDepth();
-        bkt.UpdateSplitMetaPersist(pop);
+        if (helper) {
+            --prev_depth;
+        } 
+        else 
+        {
+            bkt.UpdateSplitMetaPersist(pop);
+        }
 
         // clear all high bits of segno
-        auto root_segno = segno & (~((1UL << prev_depth) - 1));
+        auto root_segno = segno & ((1UL << prev_depth) - 1);
         auto buddy_segno = root_segno | (1UL << prev_depth);
         auto bktbits = hv.BucketBits();
         auto buddy_bkt = &dir.GetSegment(buddy_segno)->buckets[bktbits];
@@ -111,23 +129,24 @@ namespace Dalea
         std::unique_lock lock(doubling_lock);
         if (depth > bkt.GetDepth())
         {
-            simple_split(pop, bkt, key, value, hv, segno);
+            simple_split(pop, bkt, key, value, hv, segno, false);
             return;
         }
         auto prev_depth = bkt.GetDepth();
         bkt.UpdateSplitMetaPersist(pop);
 
-        auto root_segno = segno & (~((1UL << prev_depth) - 1));
+        auto root_segno = segno & ((1UL << prev_depth) - 1);
         auto buddy_segno = root_segno | (1UL << prev_depth);
 
         SegmentPtr buddy = nullptr;
+        dir.DoublingLink(depth, depth + 1);
 
-        if (!dir.Probe(buddy_segno))
+        if (dir.GetSegment(root_segno) == dir.GetSegment(buddy_segno))
         {
             TX::run(pop, [&]() {
-                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-                dir.AddSegment(pop, buddy, buddy_segno);
-            });
+                    buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+                    dir.AddSegment(pop, buddy, buddy_segno);
+                    });
 
             for (int i = 0; i < SEG_SIZE; i++)
             {
@@ -136,7 +155,7 @@ namespace Dalea
             }
         }
 
-        simple_split(pop, bkt, key, value, hv, segno);
+        simple_split(pop, bkt, key, value, hv, segno, true);
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;

@@ -23,7 +23,7 @@ namespace Dalea
         std::shared_mutex doubling_lock;
 
         void split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue & hv, SegmentPtr &seg, uint64_t segno) noexcept;
-        void simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue & hv, uint64_t segno) noexcept;
+        void simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue & hv, uint64_t segno, bool helper) noexcept;
         void complex_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue & hv, SegmentPtr &ptr, uint64_t segno) noexcept;
 
         void flatten_bucket(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue & hv, uint64_t segno) noexcept;

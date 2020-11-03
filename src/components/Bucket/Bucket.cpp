@@ -12,7 +12,7 @@ namespace Dalea
             pairs[i] = nullptr;
         }
     }
-    KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux, uint64_t segno) const noexcept
+    KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
     {
         std::shared_lock shr(mux);
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
@@ -204,7 +204,7 @@ namespace Dalea
 
     void Bucket::Migrate(Bucket &buddy, uint64_t encoding) noexcept
     {
-        uint64_t mask = ~((1UL << GetDepth()) - 1);
+        uint64_t mask = (1UL << GetDepth()) - 1;
         for (int i = 0; i < BUCKET_SIZE; i++)
         {
             if (!fingerprints[i].IsInvalid())
