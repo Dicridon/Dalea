@@ -53,8 +53,9 @@ namespace Dalea
         if (meta.subdirectories[sub]->segments[seg] == nullptr)
         {
             meta.subdirectories[sub]->segments[sub] = ptr;
+            return true;
         }
-        return true;
+        return false;
     }
 
     bool Directory::Probe(uint64_t pos) const noexcept
