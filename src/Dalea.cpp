@@ -54,6 +54,18 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
+    void HashTable::Destory() noexcept
+    {
+    }
+
+    void HashTable::Debug() const noexcept
+    {
+        for (uint64_t i = 0; i < (1UL << depth); i++)
+        {
+            dir.GetSegment(i)->Debug();
+        }
+    }
+
     void HashTable::split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         auto local_depth = bkt.GetDepth();

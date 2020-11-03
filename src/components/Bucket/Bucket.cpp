@@ -79,6 +79,11 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
+    FunctionStatus Bucket::Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
+    {
+        return FunctionStatus::Ok;
+    }
+
     bool Bucket::HasAncestor() const noexcept
     {
         return metainfo.has_ancestor;
@@ -239,8 +244,9 @@ namespace Dalea
         pmemobj_persist(pop.handle(), this, sizeof(Bucket));
     }
 
-    FunctionStatus Bucket::Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
+    void Bucket::Debug(uint64_t tag) const noexcept
     {
-        return FunctionStatus::Ok;
+        std::cout << "[[ Bucket " << tag << " reporting\n";
     }
+
 } // namespace Dalea

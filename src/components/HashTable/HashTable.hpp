@@ -1,4 +1,0 @@
-#ifndef __DALEA__HASHTABLE__HASHTABLE__
-#define __DALEA__HASHTABLE__HASHTABLE__
-
-#endif

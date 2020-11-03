@@ -15,6 +15,7 @@ namespace Dalea
         KVPairPtr Get(std::string &key) const noexcept;
         FunctionStatus Remove(PoolBase &pop, std::string &key, std::string &value) noexcept;
         void Destory() noexcept;
+        void Debug() const noexcept;
 
 
     private:

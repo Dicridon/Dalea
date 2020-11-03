@@ -28,6 +28,7 @@ namespace Dalea
         */
         bool Recover() noexcept;
         SegmentPtr Split(PoolBase &pop, Directory &dir, uint64_t bkt_bits) noexcept;
+        void Debug() const noexcept;
 
         // unable to use smart pointers
         std::shared_mutex *locks;

@@ -49,9 +49,18 @@ namespace Dalea
         return true;
     }
 
-    SegmentPtr Split(PoolBase &pop, Directory &dir, uint64_t bucket_bits)
+    SegmentPtr Segment::Split(PoolBase &pop, Directory &dir, uint64_t bucket_bits) noexcept
     {
         return nullptr;
+    }
+
+    void Segment::Debug() const noexcept
+    {
+        std::cout << "[[ Segment " << segment_no << " reporting: \n";
+        uint64_t tag = 0;
+        std::for_each(std::begin(buckets), std::end(buckets), [&](const Bucket &bkt) {
+            bkt.Debug(tag++);
+        });
     }
 
 } // namespace Dalea

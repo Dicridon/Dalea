@@ -53,6 +53,8 @@ namespace Dalea
         void PersistAncestor(PoolBase &pop) const noexcept;
         void PersistAll(PoolBase &pop) const noexcept;
 
+        void Debug(uint64_t tag) const noexcept;
+
     private:
         /*
          * metainfo:
