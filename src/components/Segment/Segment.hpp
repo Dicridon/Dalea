@@ -31,9 +31,9 @@ namespace Dalea
 
         // unable to use smart pointers
         std::shared_mutex *locks;
-        uint64_t segment_no;
-        SegStatus status;
-        Bucket buckets[SEG_SIZE];
+        pobj::p<uint64_t> segment_no;
+        pobj::p<SegStatus> status;
+        pobj::array<Bucket, SEG_SIZE> buckets;
     };
 } // namespace Dalea
 #endif

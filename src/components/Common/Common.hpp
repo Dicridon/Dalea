@@ -9,6 +9,9 @@
 #include <shared_mutex>
 #include <string>
 #include <vector>
+
+
+#define DEBUG
 namespace Dalea
 {
     using String = std::string;
@@ -27,12 +30,21 @@ namespace Dalea
         Retry,
     };
 
+#ifndef DEBUG
     constexpr int BUCKET_SIZE = 10;
     constexpr int META_BITS = 4;
     constexpr int BUCKET_BTIS = 10;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BTIS);
     constexpr int SUBDIR_SIZE = (1 << 16);
     constexpr int METADIR_SIZE = (1 << 4);
+#else
+    constexpr int BUCKET_SIZE = 2;
+    constexpr int META_BITS = 4;
+    constexpr int BUCKET_BITS = 2;
+    constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
+    constexpr int SUBDIR_SIZE = (1 << 16);
+    constexpr int METADIR_SIZE = (1 << 4);
+#endif
 
     struct HashValue
     {

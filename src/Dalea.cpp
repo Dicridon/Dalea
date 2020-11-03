@@ -7,8 +7,11 @@ namespace Dalea
     RETRY:
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
+        
+        std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
-        switch (auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no))
+        auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
+        switch (ret)
         {
         case FunctionStatus::Retry:
             goto RETRY;

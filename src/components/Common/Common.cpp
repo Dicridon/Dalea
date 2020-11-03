@@ -8,7 +8,7 @@ namespace Dalea
     }
     uint64_t HashValue::BucketBits() const noexcept
     {
-        return (hash_value << META_BITS) >> (64 - META_BITS - BUCKET_SIZE);
+        return (hash_value << META_BITS) >> (64 - BUCKET_BITS);
     }
 
     uint64_t HashValue::GetRaw() const noexcept

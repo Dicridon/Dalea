@@ -6,7 +6,9 @@ namespace Dalea
         memset(&metainfo, 0, 8 * sizeof(BucketMeta));
         for (int i = 0; i < BUCKET_SIZE; i++)
         {
-            fingerprints[i] = HashValue{0};
+            HashValue hv;
+            hv.Invalidate();
+            fingerprints[i] = hv;
             pairs[i] = nullptr;
         }
     }
@@ -67,12 +69,13 @@ namespace Dalea
         {
             return FunctionStatus::SplitRequired;
         }
-        TX::manual tx(pop);
-        auto pair = pmem::obj::make_persistent<KVPair>(
-            PString(key),
-            PString(value));
-        pairs[slot] = pair;
-        TX::commit();
+        TX::run(pop, [&]() {
+                auto pair = pmem::obj::make_persistent<KVPair>(
+                        key,
+                        value);
+                pairs[slot] = pair;
+                fingerprints[slot] = hash_value;
+                });
         return FunctionStatus::Ok;
     }
 

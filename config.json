@@ -1,10 +1,10 @@
 {
-    "compiler": "clang++",
+    "compiler": "g++",
     "header-suffix": "hpp",
     "source-suffix": "cpp",
     "flags": {
         "compile": {
-            "opt": "-O2",
+            "opt": "-O0",
             "debug": "-g",
             "std": "-std=c++17"
         },
