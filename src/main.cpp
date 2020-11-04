@@ -42,5 +42,6 @@ int main(int argc, char *argv[])
         auto value = "xxxxxxxxx" + std::to_string(i);
         r->map->Put(pop, key, value);
         std::cout << r->map->Get(key)->value.c_str() << "\n";
+        // r->map->Debug();
     }
 }

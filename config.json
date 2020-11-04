@@ -1,5 +1,5 @@
 {
-    "compiler": "g++",
+    "compiler": "clang++",
     "header-suffix": "hpp",
     "source-suffix": "cpp",
     "flags": {
