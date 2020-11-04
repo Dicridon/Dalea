@@ -14,7 +14,7 @@ namespace Dalea
             bkt = &seg->buckets[hv.BucketBits()];
         }
         
-        std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        // std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
         auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
         switch (ret)
@@ -68,6 +68,7 @@ namespace Dalea
 
     void HashTable::split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
+        // std::cout << "entering " << __FUNCTION__ << "\n";
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
@@ -77,6 +78,7 @@ namespace Dalea
         {
             complex_split(pop, bkt, key, value, hv, seg, segno);
         }
+        // std::cout << "leaving" << __FUNCTION__ << "\n";
     }
 
     /*
@@ -102,6 +104,7 @@ namespace Dalea
      */
     void HashTable::simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
+        // std::cout << "entering " << __FUNCTION__ << "\n";
         auto prev_depth = bkt.GetDepth();
         if (helper) {
             --prev_depth;
@@ -169,6 +172,7 @@ namespace Dalea
             }
             walk_ptr->buckets[bktbits].SetAncestorPersist(pop, buddy_segno);
         }
+        // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
     /*
@@ -181,10 +185,12 @@ namespace Dalea
      */
     void HashTable::complex_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
+        // std::cout << "entering " << __FUNCTION__ << "\n";
         std::unique_lock lock(doubling_lock);
         if (depth > bkt.GetDepth())
         {
             simple_split(pop, bkt, key, value, hv, segno, false);
+            // std::cout << "leaving " << __FUNCTION__ << "\n";
             return;
         }
         auto prev_depth = bkt.GetDepth();
@@ -225,6 +231,7 @@ namespace Dalea
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;
         pmemobj_persist(pop.handle(), &depth, sizeof(depth));
+        // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
     /*
