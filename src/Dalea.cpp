@@ -194,7 +194,7 @@ namespace Dalea
         auto buddy_segno = root_segno | (1UL << prev_depth);
 
         SegmentPtr buddy = nullptr;
-        dir.DoublingLink(depth, depth + 1);
+        dir.DoublingLink(pop, depth, depth + 1);
 
         auto root = dir.GetSegment(root_segno);
 

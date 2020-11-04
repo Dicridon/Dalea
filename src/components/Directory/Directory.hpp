@@ -44,7 +44,7 @@ namespace Dalea
         bool AddSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept;
         bool Probe(uint64_t pos) const noexcept;
         bool Probe(const HashValue &hv) const noexcept;
-        void DoublingLink(uint64_t prev_depth, uint64_t new_depth) noexcept;
+        void DoublingLink(PoolBase &pop, uint64_t prev_depth, uint64_t new_depth) noexcept;
 
         MetaDirectory meta;
     };
