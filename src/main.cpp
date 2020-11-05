@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     Dalea::CmdParser parser;
     if (argc < 4 || !parser.buildCmdParser(argc, argv))
     {
-        std::cout << "usage: ./target/Dalea -p pool_file -w warmup_file -r run_file [-t [threads]]\n";
+        std::cout << "usage: ./target/Dalea -p pool_file -w warmup_file -r run_file -t threads -b batch\n";
         return -1;
     }
 
@@ -23,14 +23,14 @@ int main(int argc, char *argv[])
     auto warm_file = parser.getOption("warm_file");
     auto run_file = parser.getOption("run_file");
     auto threads = std::stoi(parser.getOption("threads"));
-    auto batch = std::stol(parser.getOptoin("batch"));
+    auto batch = std::stol(parser.getOption("batch"));
 
     std::cout << "[[ bench info: \n";
     std::cout << "   pool file is " << pool_file << "\n";
     std::cout << "   warm file is " << warm_file << "\n";
     std::cout << "   run file is " << run_file << "\n";
     std::cout << "   threads is " << threads << "\n";
-    std::cotu << "   batch size is " << batch << "\n";
+    std::cout << "   batch size is " << batch << "\n";
 
     remove(pool_file.c_str());
     auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR); 

@@ -15,6 +15,9 @@ namespace Dalea {
             if (parseThreads(argv[i], i < argc - 1 ? argv[i + 1] : nullptr) == ParserStatus::Rejected) {
                 return false;
             }
+            if (parseBatch(argv[i], i < argc - 1 ? argv[i + 1] : nullptr) == ParserStatus::Rejected) {
+                return false;
+            }
         }
         return true;
     }
@@ -130,12 +133,11 @@ namespace Dalea {
     }
     
     ParserStatus CmdParser::parseThreads(char *argv, char *next)  {
-        std::string value("1");
         if (strncmp("--threads", argv, 9) == 0) {
             if (strncmp("--threads=", argv, 10) == 0) {
                 std::string value(argv + 10);
                 if (value.length() == 0) {
-                    std::cerr << "please offer non-empty value to threads\n";
+                    std::cerr << "please offer a value to threads\n";
                     return ParserStatus::Rejected;
                 }
                 putOption("threads", value);
@@ -149,15 +151,39 @@ namespace Dalea {
                 putOption("threads", next);
                 return ParserStatus::Accepted;
             } else {
-                std::cerr << "option '-t' is specified but no value is supplied\n";
+                std::cerr << "not enough arguments to -t\n";
                 return ParserStatus::Rejected;
             }
         }
         
-        if (opts.find("threads") == opts.end()) {
-            putOption("threads", value);
+        return ParserStatus::Missing;
+    }
+    
+    ParserStatus CmdParser::parseBatch(char *argv, char *next)  {
+        if (strncmp("--batch", argv, 7) == 0) {
+            if (strncmp("--batch=", argv, 8) == 0) {
+                std::string value(argv + 8);
+                if (value.length() == 0) {
+                    std::cerr << "please offer a value to batch\n";
+                    return ParserStatus::Rejected;
+                }
+                putOption("batch", value);
+            }
+        
+            return ParserStatus::Accepted;
         }
-        return ParserStatus::Accepted;
+        
+        if (strncmp ("-b", argv, 2) == 0) {
+            if (next) {
+                putOption("batch", next);
+                return ParserStatus::Accepted;
+            } else {
+                std::cerr << "not enough arguments to -b\n";
+                return ParserStatus::Rejected;
+            }
+        }
+        
+        return ParserStatus::Missing;
     }
     
 }

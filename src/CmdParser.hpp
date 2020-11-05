@@ -32,6 +32,8 @@ namespace Dalea {
             ParserStatus parseRunFile(char *argv, char *next) ;
             
             ParserStatus parseThreads(char *argv, char *next) ;
+            
+            ParserStatus parseBatch(char *argv, char *next) ;
 
     };
 }
