@@ -51,8 +51,17 @@ namespace Dalea
             });
         }
         meta.subdirectories[sub]->segments[seg] = ptr;
-        return false;
+        return true;
     }
+
+    bool Directory::SetSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->segments[seg] = ptr;
+        return true;
+    }
+
 
     bool Directory::Probe(uint64_t pos) const noexcept
     {

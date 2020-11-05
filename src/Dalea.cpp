@@ -14,7 +14,7 @@ namespace Dalea
             bkt = &seg->buckets[hv.BucketBits()];
         }
         
-        // std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
         auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
         switch (ret)
@@ -143,7 +143,8 @@ namespace Dalea
             }
         }
 
-        auto buddy_bkt = &dir.GetSegment(buddy_segno)->buckets[bktbits];
+        auto buddy_seg = dir.GetSegment(buddy_segno);
+        auto buddy_bkt = &buddy_seg->buckets[bktbits];
         bkt.Migrate(*buddy_bkt, root_segno);
         buddy_bkt->SetMetaPersist(pop, bkt.GetDepth(), 0, (1UL << 49));
 
@@ -158,6 +159,7 @@ namespace Dalea
             if(walk_ptr->segment_no != walk)
             {
                 // a reference pointer pointing to one ancestor
+                dir.SetSegment(pop, buddy_seg, walk);
                 continue;
             }
 

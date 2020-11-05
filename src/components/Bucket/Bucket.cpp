@@ -218,7 +218,9 @@ namespace Dalea
                 {
                     // buddy bucket is ensured to be empty
                     buddy.fingerprints[i] = fingerprints[i];
+                    fingerprints[i].Invalidate();
                     buddy.pairs[i] = pairs[i];
+                    pairs[i] = nullptr;
                 }
             }
         }

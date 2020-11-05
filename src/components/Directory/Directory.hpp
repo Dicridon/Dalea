@@ -42,6 +42,7 @@ namespace Dalea
         const SegmentPtr &GetSegment(uint64_t pos) const noexcept;
         const SegmentPtr &GetSegment(const HashValue &hv, uint64_t depth) const noexcept;
         bool AddSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept;
+        bool SetSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept;
         bool Probe(uint64_t pos) const noexcept;
         bool Probe(const HashValue &hv) const noexcept;
         void DoublingLink(PoolBase &pop, uint64_t prev_depth, uint64_t new_depth) noexcept;

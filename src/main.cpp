@@ -44,31 +44,28 @@ int main(int argc, char *argv[])
         auto key = "xxxxxxxxx" + std::to_string(i);
         auto value = "xxxxxxxxx" + std::to_string(i);
         r->map->Put(pop, key, value);
+        // r->map->Debug();
         // std::cout << r->map->Get(key)->value.c_str() << "\n";
-        if (i % (batch / 100) == 0)
-        {
-            std::cout << "progress: " << double(i) / batch * 100 << "%\n";
-        }
+        // if (i % (batch / 100) == 0)
+        // {
+        //     std::cout << "progress: " << double(i) / batch * 100 << "%\n";
+        // }
     }
 
     for (long i = 0; i < batch; i++)
     {
         auto key = "xxxxxxxxx" + std::to_string(i);
         auto value = "xxxxxxxxx" + std::to_string(i);
-        // std::cout << r->map->Get(key)->value.c_str() << "\n";
         auto ptr = r->map->Get(key);
         if (ptr == nullptr)
         {
             std::cout << "missing value for key " << key << "\n";
-            return -1;
         }
-        
-        if (ptr->value != value)
+        else if (ptr->value != value)
         {
             std::cout << "wrong value for key " << key << "\n";
             std::cout << "expecting " << value << "\n";
             std::cout << "got " << ptr->value.c_str() << "\n";
-            return -1;
         }
     }
     std::cout << "single thread check passed\n";
