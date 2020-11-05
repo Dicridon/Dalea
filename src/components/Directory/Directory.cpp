@@ -62,7 +62,6 @@ namespace Dalea
         return true;
     }
 
-
     bool Directory::Probe(uint64_t pos) const noexcept
     {
         auto sub = pos / SUBDIR_SIZE;
@@ -77,19 +76,19 @@ namespace Dalea
 
     void Directory::DoublingLink(PoolBase &pop, uint64_t prev_depth, uint64_t new_depth) noexcept
     {
-        auto start = (1UL << prev_depth); 
+        auto start = (1UL << prev_depth);
         auto end = (1UL << new_depth);
         for (auto i = start; i < end; i += SUBDIR_SIZE)
         {
             auto sub = i / SUBDIR_SIZE;
             if (meta.subdirectories[sub] == nullptr)
             {
-                TX::run(pop, [&](){
+                TX::run(pop, [&]() {
                     meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop);
                 });
             }
         }
-        for(auto i = start; i < end; i++)
+        for (auto i = start; i < end; i++)
         {
             // this buddy is the older buddy
             auto buddy = i - start;

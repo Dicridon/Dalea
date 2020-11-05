@@ -70,12 +70,12 @@ namespace Dalea
             return FunctionStatus::SplitRequired;
         }
         TX::run(pop, [&]() {
-                auto pair = pmem::obj::make_persistent<KVPair>(
-                        key,
-                        value);
-                pairs[slot] = pair;
-                fingerprints[slot] = hash_value;
-                });
+            auto pair = pmem::obj::make_persistent<KVPair>(
+                key,
+                value);
+            pairs[slot] = pair;
+            fingerprints[slot] = hash_value;
+        });
         return FunctionStatus::Ok;
     }
 
@@ -252,12 +252,14 @@ namespace Dalea
         std::cout << "       depth: " << uint64_t(GetDepth()) << "\n";
         std::cout << "       keys: \n";
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
-            if (kvp != nullptr) {
+            if (kvp != nullptr)
+            {
                 std::cout << "       >> " << kvp->key.c_str() << "\n";
             }
         });
 
-        if (HasAncestor()) {
+        if (HasAncestor())
+        {
             std::cout << "          ancestor: " << GetAncestor() << "\n";
         }
     }

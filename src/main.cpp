@@ -33,11 +33,11 @@ int main(int argc, char *argv[])
     std::cout << "   batch size is " << batch << "\n";
 
     remove(pool_file.c_str());
-    auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR); 
+    auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR);
     auto r = pop.root();
     TX::run(pop, [&]() {
-            r->map = pobj::make_persistent<HashTable>(pop);
-            });
+        r->map = pobj::make_persistent<HashTable>(pop);
+    });
 
     for (long i = 0; i < batch; i++)
     {

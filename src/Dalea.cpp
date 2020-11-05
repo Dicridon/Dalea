@@ -13,7 +13,7 @@ namespace Dalea
             seg = dir.GetSegment(bkt->GetAncestor());
             bkt = &seg->buckets[hv.BucketBits()];
         }
-        
+
         std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
         auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
@@ -106,10 +106,11 @@ namespace Dalea
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
         auto prev_depth = bkt.GetDepth();
-        if (helper) {
+        if (helper)
+        {
             --prev_depth;
-        } 
-        else 
+        }
+        else
         {
             bkt.UpdateSplitMetaPersist(pop);
         }
@@ -121,59 +122,11 @@ namespace Dalea
         auto root = dir.GetSegment(root_segno);
         if (root == dir.GetSegment(buddy_segno))
         {
-            SegmentPtr buddy = nullptr;
-            TX::run(pop, [&]() {
-                    buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-                    dir.AddSegment(pop, buddy, buddy_segno);
-                    });
-
-            for (int i = 0; i < SEG_SIZE; i++)
-            {
-                // do not persist here
-                if (root->buckets[i].HasAncestor())
-                {
-                    // avoid chaining
-                    buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor());
-                }
-                else
-                {
-                    buddy->buckets[i].SetAncestor(segno);
-                }
-
-            }
+            make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         }
 
-        auto buddy_seg = dir.GetSegment(buddy_segno);
-        auto buddy_bkt = &buddy_seg->buckets[bktbits];
-        bkt.Migrate(*buddy_bkt, root_segno);
-        buddy_bkt->SetMetaPersist(pop, bkt.GetDepth(), 0, (1UL << 49));
+        migrate_and_pave(pop, root_segno, buddy_segno, bkt, bktbits);
 
-        auto current_depth = bkt.GetDepth();
-        auto difference = depth - current_depth;
-        auto walk = buddy_segno;
-        SegmentPtr walk_ptr;
-        for (int i = 1; i < (1 << difference); i++)
-        {
-            walk += (1UL << current_depth);
-            walk_ptr = dir.GetSegment(walk);
-            if(walk_ptr->segment_no != walk)
-            {
-                // a reference pointer pointing to one ancestor
-                dir.SetSegment(pop, buddy_seg, walk);
-                continue;
-            }
-
-            if (dir.GetSegment(walk) == dir.GetSegment(buddy_segno))
-            {
-                /*
-                 * buddy bkt has uninitialized descendents
-                 * since this buddy bkt hasn't splitted yet, all the descendents would be pointing
-                 * back to this buddy bkt, thus break here to save some execution time
-                 */ 
-                break;
-            }
-            walk_ptr->buckets[bktbits].SetAncestorPersist(pop, buddy_segno);
-        }
         // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
@@ -208,24 +161,7 @@ namespace Dalea
 
         if (root == dir.GetSegment(buddy_segno))
         {
-            TX::run(pop, [&]() {
-                    buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-                    dir.AddSegment(pop, buddy, buddy_segno);
-                    });
-
-            for (int i = 0; i < SEG_SIZE; i++)
-            {
-                // do not persist here
-                if (root->buckets[i].HasAncestor())
-                {
-                    // avoid chaining
-                    buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor());
-                }
-                else
-                {
-                    buddy->buckets[i].SetAncestor(segno);
-                }
-            }
+            make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         }
 
         simple_split(pop, bkt, key, value, hv, segno, true);
@@ -242,5 +178,74 @@ namespace Dalea
      */
     void HashTable::flatten_bucket(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno) noexcept
     {
+    }
+
+    SegmentPtr HashTable::make_buddy_segment(PoolBase &pop, const SegmentPtr &root, uint64_t segno, uint64_t buddy_segno, const Bucket &bkt) noexcept
+    {
+        SegmentPtr buddy = nullptr;
+        TX::run(pop, [&]() {
+            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+            dir.AddSegment(pop, buddy, buddy_segno);
+        });
+
+        for (int i = 0; i < SEG_SIZE; i++)
+        {
+            // do not persist here
+            if (root->buckets[i].HasAncestor())
+            {
+                // avoid chaining
+                buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor());
+            }
+            else
+            {
+                buddy->buckets[i].SetAncestor(segno);
+            }
+        }
+        return buddy;
+    }
+
+    void HashTable::migrate_and_pave(PoolBase &pop, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
+    {
+        auto buddy_seg = dir.GetSegment(buddy_segno);
+        auto buddy_bkt = &buddy_seg->buckets[bktbits];
+        bkt.Migrate(*buddy_bkt, root_segno);
+        buddy_bkt->SetMetaPersist(pop, bkt.GetDepth(), 0, (1UL << 49));
+
+        auto current_depth = bkt.GetDepth();
+        auto difference = depth - current_depth;
+        auto walk = buddy_segno;
+        SegmentPtr walk_ptr;
+        for (int i = 1; i < (1 << difference); i++)
+        {
+            walk += (1UL << current_depth);
+            walk_ptr = dir.GetSegment(walk);
+            if (walk_ptr->segment_no != walk)
+            {
+                // a reference pointer pointing to one ancestor
+                // dir.SetSegment(pop, buddy_seg, walk);
+                SegmentPtr pre_seg = nullptr;
+                TX::run(pop, [&]() {
+                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                    dir.AddSegment(pop, pre_seg, walk);
+                });
+                for (int i = 0; i < SEG_SIZE; i++)
+                {
+                    pre_seg->buckets[i].SetAncestor(walk_ptr->segment_no);
+                }
+                pre_seg->buckets[bktbits].SetAncestor(buddy_segno);
+                continue;
+            }
+
+            if (dir.GetSegment(walk) == dir.GetSegment(buddy_segno))
+            {
+                /*
+                 * buddy bkt has uninitialized descendents
+                 * since this buddy bkt hasn't splitted yet, all the descendents would be pointing
+                 * back to this buddy bkt, thus break here to save some execution time
+                 */
+                break;
+            }
+            walk_ptr->buckets[bktbits].SetAncestorPersist(pop, buddy_segno);
+        }
     }
 } // namespace Dalea
