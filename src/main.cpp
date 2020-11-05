@@ -23,25 +23,53 @@ int main(int argc, char *argv[])
     auto warm_file = parser.getOption("warm_file");
     auto run_file = parser.getOption("run_file");
     auto threads = std::stoi(parser.getOption("threads"));
+    auto batch = std::stol(parser.getOptoin("batch"));
 
     std::cout << "[[ bench info: \n";
     std::cout << "   pool file is " << pool_file << "\n";
     std::cout << "   warm file is " << warm_file << "\n";
     std::cout << "   run file is " << run_file << "\n";
     std::cout << "   threads is " << threads << "\n";
+    std::cotu << "   batch size is " << batch << "\n";
 
     remove(pool_file.c_str());
-    auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 1024, S_IWUSR | S_IRUSR); 
+    auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR); 
     auto r = pop.root();
     TX::run(pop, [&]() {
             r->map = pobj::make_persistent<HashTable>(pop);
             });
-    for (long i = 0; i < 10000000; i++)
+
+    for (long i = 0; i < batch; i++)
     {
         auto key = "xxxxxxxxx" + std::to_string(i);
         auto value = "xxxxxxxxx" + std::to_string(i);
         r->map->Put(pop, key, value);
         // std::cout << r->map->Get(key)->value.c_str() << "\n";
-        // r->map->Debug();
+        if (i % (batch / 100) == 0)
+        {
+            std::cout << "progress: " << double(i) / batch * 100 << "%\n";
+        }
     }
+
+    for (long i = 0; i < batch; i++)
+    {
+        auto key = "xxxxxxxxx" + std::to_string(i);
+        auto value = "xxxxxxxxx" + std::to_string(i);
+        // std::cout << r->map->Get(key)->value.c_str() << "\n";
+        auto ptr = r->map->Get(key);
+        if (ptr == nullptr)
+        {
+            std::cout << "missing value for key " << key << "\n";
+            return -1;
+        }
+        
+        if (ptr->value != value)
+        {
+            std::cout << "wrong value for key " << key << "\n";
+            std::cout << "expecting " << value << "\n";
+            std::cout << "got " << ptr->value.c_str() << "\n";
+            return -1;
+        }
+    }
+    std::cout << "single thread check passed\n";
 }
