@@ -46,10 +46,10 @@ int main(int argc, char *argv[])
         r->map->Put(pop, key, value);
         // r->map->Debug();
         // std::cout << r->map->Get(key)->value.c_str() << "\n";
-        // if (i % (batch / 100) == 0)
-        // {
-        //     std::cout << "progress: " << double(i) / batch * 100 << "%\n";
-        // }
+        if (i % (batch / 100) == 0)
+        {
+            std::cout << "progress: " << double(i) / batch * 100 << "%\n";
+        }
     }
 
     for (long i = 0; i < batch; i++)

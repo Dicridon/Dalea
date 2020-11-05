@@ -104,7 +104,7 @@ namespace Dalea
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
-    int64_t Bucket::GetAncestor() const noexcept
+    uint64_t Bucket::GetAncestor() const noexcept
     {
         if (!HasAncestor())
         {

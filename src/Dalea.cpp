@@ -1,4 +1,5 @@
 #include "Dalea.hpp"
+#include <iomanip>
 namespace Dalea
 {
     FunctionStatus HashTable::Put(PoolBase &pop, std::string &key, std::string &value) noexcept
@@ -14,7 +15,7 @@ namespace Dalea
             bkt = &seg->buckets[hv.BucketBits()];
         }
 
-        std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        // std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
         auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
         switch (ret)
@@ -62,8 +63,32 @@ namespace Dalea
     {
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
-            dir.GetSegment(i)->Debug();
+            std::cout << std::setw(4) << i << " ";
         }
+        std::cout << std::endl;
+
+        for (uint64_t i = 0; i < (1UL << depth); i++)
+        {
+            std::cout << std::setw(4) << dir.GetSegment(i)->segment_no << " ";
+        }
+        std::cout << std::endl;
+
+        for (uint64_t j = 0; j < SEG_SIZE; j++)
+        {
+            for (uint64_t i = 0; i < (1UL << depth); i++)
+            {
+                if (dir.GetSegment(i)->buckets[j].HasAncestor())
+                {
+                    std::cout << std::setw(4) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
+                }
+                else
+                {
+                    std::cout << "     ";
+                }
+            }
+            std::cout << std::endl;
+        }
+
     }
 
     void HashTable::split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
@@ -161,7 +186,7 @@ namespace Dalea
 
         if (root == dir.GetSegment(buddy_segno))
         {
-            make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+            buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         }
 
         simple_split(pop, bkt, key, value, hv, segno, true);
@@ -184,9 +209,9 @@ namespace Dalea
     {
         SegmentPtr buddy = nullptr;
         TX::run(pop, [&]() {
-            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-            dir.AddSegment(pop, buddy, buddy_segno);
-        });
+                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+                dir.AddSegment(pop, buddy, buddy_segno);
+                });
 
         for (int i = 0; i < SEG_SIZE; i++)
         {
@@ -225,14 +250,15 @@ namespace Dalea
                 // dir.SetSegment(pop, buddy_seg, walk);
                 SegmentPtr pre_seg = nullptr;
                 TX::run(pop, [&]() {
-                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                    dir.AddSegment(pop, pre_seg, walk);
-                });
+                        pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                        dir.AddSegment(pop, pre_seg, walk);
+                        });
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
-                    pre_seg->buckets[i].SetAncestor(walk_ptr->segment_no);
+                    auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor() : walk_ptr->segment_no.get_ro();
+                    pre_seg->buckets[i].SetAncestor(ans);
                 }
-                pre_seg->buckets[bktbits].SetAncestor(buddy_segno);
+                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor() : buddy_segno);
                 continue;
             }
 
