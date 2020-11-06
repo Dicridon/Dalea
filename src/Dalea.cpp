@@ -88,7 +88,6 @@ namespace Dalea
             }
             std::cout << std::endl;
         }
-
     }
 
     void HashTable::split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
@@ -162,6 +161,9 @@ namespace Dalea
      * 3. prepare a new segment, all buckets point to corresponding buckets in old segment
      * 4. do a simple split
      * 5. add this new segment to Directory
+     * 
+     * 
+     * only one thread woulding calling this method
      */
     void HashTable::complex_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
@@ -209,9 +211,9 @@ namespace Dalea
     {
         SegmentPtr buddy = nullptr;
         TX::run(pop, [&]() {
-                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-                dir.AddSegment(pop, buddy, buddy_segno);
-                });
+            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+            dir.AddSegment(pop, buddy, buddy_segno);
+        });
 
         for (int i = 0; i < SEG_SIZE; i++)
         {
@@ -250,9 +252,9 @@ namespace Dalea
                 // dir.SetSegment(pop, buddy_seg, walk);
                 SegmentPtr pre_seg = nullptr;
                 TX::run(pop, [&]() {
-                        pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                        dir.AddSegment(pop, pre_seg, walk);
-                        });
+                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                    dir.AddSegment(pop, pre_seg, walk);
+                });
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
                     auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor() : walk_ptr->segment_no.get_ro();
