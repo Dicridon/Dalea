@@ -11,10 +11,11 @@ namespace Dalea
             fingerprints[i] = hv;
             pairs[i] = nullptr;
         }
+        mux = new std::shared_mutex;
     }
-    KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
+    KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value) const noexcept
     {
-        std::shared_lock shr(mux);
+        std::shared_lock shr(*mux);
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
@@ -36,14 +37,14 @@ namespace Dalea
         return nullptr;
     }
 
-    FunctionStatus Bucket::Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, std::shared_mutex &mux, uint64_t segno) noexcept
+    FunctionStatus Bucket::Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
     {
         if (HasAncestor())
         {
             return FunctionStatus::FlattenRequired;
         }
 
-        std::unique_lock exc(mux);
+        std::unique_lock exc(*mux);
         int slot = -1;
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         for (auto search = 0; search < BUCKET_SIZE; search++)
@@ -82,6 +83,36 @@ namespace Dalea
     FunctionStatus Bucket::Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
     {
         return FunctionStatus::Ok;
+    }
+
+    void Bucket::Lock() noexcept
+    {
+        mux->lock();
+    }
+
+    bool Bucket::TryLock() noexcept
+    {
+        return mux->try_lock();
+    }
+
+    void Bucket::Unlock() noexcept
+    {
+        mux->unlock();
+    }
+
+    void Bucket::LockShared() noexcept
+    {
+        mux->lock_shared();
+    }
+
+    bool Bucket::TryLockShared() noexcept
+    {
+        return mux->try_lock_shared();
+    }
+
+    void Bucket::UnlockShared() noexcept
+    {
+        return mux->unlock_shared();
     }
 
     bool Bucket::HasAncestor() const noexcept

@@ -26,6 +26,7 @@ namespace Dalea
         {
             segments[i] = nullptr;
         }
+        mutexes = new std::shared_mutex[SUBDIR_SIZE];
     }
 
     const SegmentPtr &Directory::GetSegment(uint64_t pos) const noexcept
@@ -38,6 +39,48 @@ namespace Dalea
     const SegmentPtr &Directory::GetSegment(const HashValue &hv, uint64_t depth) const noexcept
     {
         return GetSegment(hv.SegmentBits(depth));
+    }
+
+    void Directory::LockSegment(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].lock();
+    }
+
+    void Directory::LockSegmentShared(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].lock_shared();
+    }
+
+    void Directory::TryLockSegment(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].try_lock();
+    }
+
+    void Directory::TryLockSegmentShared(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].try_lock_shared();
+    }
+
+    void Directory::UnlockSegment(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].unlock();
+    }
+
+    void Directory::UnlockSegmentShared(uint64_t pos) noexcept
+    {
+        auto sub = pos / SUBDIR_SIZE;
+        auto seg = pos % SUBDIR_SIZE;
+        meta.subdirectories[sub]->mutexes[seg].unlock_shared();
     }
 
     bool Directory::AddSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept

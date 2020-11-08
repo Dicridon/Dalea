@@ -16,9 +16,16 @@ namespace Dalea
          */
         ~Bucket() = default;
 
-        KVPairPtr Get(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
-        FunctionStatus Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, std::shared_mutex &mux, uint64_t segno) noexcept;
+        KVPairPtr Get(const String &key, const HashValue &hash_value) const noexcept;
+        FunctionStatus Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept;
         FunctionStatus Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
+
+        void Lock() noexcept;
+        bool TryLock() noexcept;
+        void Unlock() noexcept;
+        void LockShared() noexcept;
+        bool TryLockShared() noexcept;
+        void UnlockShared() noexcept;
 
         bool HasAncestor() const noexcept;
         void SetAncestor(int64_t an) noexcept;
@@ -79,7 +86,8 @@ namespace Dalea
         HashValue fingerprints[BUCKET_SIZE];
         KVPairPtr pairs[BUCKET_SIZE];
         // the index of ancestor segment in directory
-        int64_t padding;
+        // int64_t padding;
+        std::shared_mutex *mux;
     };
 } // namespace Dalea
 #endif

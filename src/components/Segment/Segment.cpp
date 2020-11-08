@@ -19,7 +19,6 @@ namespace Dalea
             status = SegStatus::Quiescent;
         }
 
-        locks = new std::shared_mutex[SEG_SIZE];
         std::for_each(std::begin(buckets), std::end(buckets), [&](Bucket &bkt) {
             bkt.SetDepth(depth);
         });
@@ -45,7 +44,6 @@ namespace Dalea
     */
     bool Segment::Recover() noexcept
     {
-        locks = new std::shared_mutex[SEG_SIZE];
         return true;
     }
 

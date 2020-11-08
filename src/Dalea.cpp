@@ -17,14 +17,13 @@ namespace Dalea
 
         // std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
 
-        auto ret = bkt->Put(pop, key, value, hv, seg->locks[hv.BucketBits()], seg->segment_no);
+        auto ret = bkt->Put(pop, key, value, hv, seg->segment_no);
         switch (ret)
         {
         case FunctionStatus::Retry:
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
-            std::unique_lock lock(seg->locks[hv.BucketBits()]);
             split(pop, *bkt, key, value, hv, seg, seg->segment_no);
         }
             goto RETRY;
@@ -47,7 +46,7 @@ namespace Dalea
             seg = dir.GetSegment(bkt->GetAncestor());
             bkt = &seg->buckets[hv.BucketBits()];
         }
-        return bkt->Get(key, hv, seg->locks[hv.BucketBits()]);
+        return bkt->Get(key, hv);
     }
 
     FunctionStatus HashTable::Remove(PoolBase &pop, std::string &key, std::string &value) noexcept
@@ -96,11 +95,15 @@ namespace Dalea
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
+            std::shared_lock l(doubling_lock);
             simple_split(pop, bkt, key, value, hv, segno, false);
         }
         else
         {
-            complex_split(pop, bkt, key, value, hv, seg, segno);
+            if (doubling_lock.try_lock())
+            {
+                complex_split(pop, bkt, key, value, hv, seg, segno);
+            }
         }
         // std::cout << "leaving" << __FUNCTION__ << "\n";
     }
@@ -129,6 +132,14 @@ namespace Dalea
     void HashTable::simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
+        /*
+         * exclusive access to one bucket
+         */
+        if (!bkt.TryLock())
+        {
+            return;
+        }
+
         auto prev_depth = bkt.GetDepth();
         if (helper)
         {
@@ -144,13 +155,15 @@ namespace Dalea
         auto buddy_segno = root_segno | (1UL << prev_depth);
         auto bktbits = hv.BucketBits();
         auto root = dir.GetSegment(root_segno);
+        dir.LockSegment(buddy_segno);
         if (root == dir.GetSegment(buddy_segno))
         {
             make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         }
+        dir.UnlockSegment(buddy_segno);
 
         migrate_and_pave(pop, root_segno, buddy_segno, bkt, bktbits);
-
+        bkt.Unlock();
         // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
@@ -168,13 +181,20 @@ namespace Dalea
     void HashTable::complex_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
-        std::unique_lock lock(doubling_lock);
-        if (depth > bkt.GetDepth())
-        {
-            simple_split(pop, bkt, key, value, hv, segno, false);
-            // std::cout << "leaving " << __FUNCTION__ << "\n";
-            return;
-        }
+        // std::unique_lock lock(doubling_lock);
+        // if (depth > bkt.GetDepth())
+        // {
+        //     simple_split(pop, bkt, key, value, hv, segno, false);
+        //     // std::cout << "leaving " << __FUNCTION__ << "\n";
+        //     doubling_lock.unlock();
+        //     return;
+        // }
+        /* 
+         * bucket depth would not be changed during a doubling
+         * becaused all puts to this bucket result in 
+         * directory doubling and fall into this function, 
+         * competing doubling_lock
+         */
         auto prev_depth = bkt.GetDepth();
         bkt.UpdateSplitMetaPersist(pop);
 
@@ -186,16 +206,17 @@ namespace Dalea
 
         auto root = dir.GetSegment(root_segno);
 
-        if (root == dir.GetSegment(buddy_segno))
-        {
-            buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
-        }
+        // if (root == dir.GetSegment(buddy_segno))
+        // {
+        buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+        // }
 
         simple_split(pop, bkt, key, value, hv, segno, true);
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;
         pmemobj_persist(pop.handle(), &depth, sizeof(depth));
+        bkt.ClearSplit();
         // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
@@ -246,6 +267,7 @@ namespace Dalea
         {
             walk += (1UL << current_depth);
             walk_ptr = dir.GetSegment(walk);
+            dir.LockSegment(walk);
             if (walk_ptr->segment_no != walk)
             {
                 // a reference pointer pointing to one ancestor
@@ -263,6 +285,7 @@ namespace Dalea
                 pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor() : buddy_segno);
                 continue;
             }
+            dir.UnlockSegment(walk);
 
             if (dir.GetSegment(walk) == dir.GetSegment(buddy_segno))
             {

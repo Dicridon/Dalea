@@ -31,7 +31,6 @@ namespace Dalea
         void Debug() const noexcept;
 
         // unable to use smart pointers
-        std::shared_mutex *locks;
         pobj::p<uint64_t> segment_no;
         pobj::p<SegStatus> status;
         pobj::array<Bucket, SEG_SIZE> buckets;
