@@ -2,7 +2,7 @@
 #include <iomanip>
 namespace Dalea
 {
-    FunctionStatus HashTable::Put(PoolBase &pop, std::string &key, std::string &value) noexcept
+    FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
     RETRY:
@@ -24,19 +24,19 @@ namespace Dalea
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
-            split(pop, *bkt, key, value, hv, seg, seg->segment_no);
+            split(pop, *bkt, hv, seg, seg->segment_no);
         }
             goto RETRY;
         case FunctionStatus::FlattenRequired:
         {
-            flatten_bucket(pop, *bkt, key, value, hv, seg->segment_no);
+            flatten_bucket(pop, *bkt, hv, seg->segment_no);
         }
         default:
             return ret;
         }
     }
 
-    KVPairPtr HashTable::Get(std::string &key) const noexcept
+    KVPairPtr HashTable::Get(const std::string &key) const noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
         auto seg = dir.GetSegment(hv, depth);
@@ -49,7 +49,7 @@ namespace Dalea
         return bkt->Get(key, hv);
     }
 
-    FunctionStatus HashTable::Remove(PoolBase &pop, std::string &key, std::string &value) noexcept
+    FunctionStatus HashTable::Remove(PoolBase &pop, const std::string &key) noexcept
     {
         return FunctionStatus::Ok;
     }
@@ -89,20 +89,20 @@ namespace Dalea
         }
     }
 
-    void HashTable::split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
             std::shared_lock l(doubling_lock);
-            simple_split(pop, bkt, key, value, hv, segno, false);
+            simple_split(pop, bkt, hv, segno, false);
         }
         else
         {
             if (doubling_lock.try_lock())
             {
-                complex_split(pop, bkt, key, value, hv, seg, segno);
+                complex_split(pop, bkt, hv, seg, segno);
                 doubling_lock.unlock();
             }
         }
@@ -130,7 +130,7 @@ namespace Dalea
      *  concurrent sweep seems to be viable, for each thread touches different kvs, ther is no conflicts
      *  but should ensure the correctness of global depth after a crash
      */
-    void HashTable::simple_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno, bool helper) noexcept
+    void HashTable::simple_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
         /*
@@ -179,7 +179,7 @@ namespace Dalea
      * 
      * only one thread woulding calling this method
      */
-    void HashTable::complex_split(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::complex_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
         // std::unique_lock lock(doubling_lock);
@@ -212,7 +212,7 @@ namespace Dalea
         buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         // }
 
-        simple_split(pop, bkt, key, value, hv, segno, true);
+        simple_split(pop, bkt, hv, segno, true);
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;
@@ -225,7 +225,7 @@ namespace Dalea
      * progress is similar to the sweep method in simple split
      * NOT REQUIRED FOR DALEA
      */
-    void HashTable::flatten_bucket(PoolBase &pop, Bucket &bkt, std::string &key, std::string &value, const HashValue &hv, uint64_t segno) noexcept
+    void HashTable::flatten_bucket(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno) noexcept
     {
     }
 

@@ -1,4 +1,9 @@
 #include <iostream>
+#include <thread>
+#include <vector>
+#include <queue>
+#include <algorithm>
+#include <numeric>
 
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
@@ -9,6 +14,36 @@ struct DaleaRoot
 {
     pobj::persistent_ptr<HashTable> map;
 };
+
+static std::string new_string(uint64_t i)
+{
+    static std::string prefix = "xxxxxxxxx";
+    return prefix + std::to_string(i);
+}
+
+auto prepare_pool(std::string &file, size_t size)
+{
+    remove(file.c_str());
+    auto pop = pobj::pool<DaleaRoot>::create(file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR);
+    return pop;
+}
+
+auto prepare_root(pobj::pool<DaleaRoot> &pop)
+{
+    auto r = pop.root();
+    TX::run(pop, [&]() {
+        r->map = pobj::make_persistent<HashTable>(pop);
+    });
+    return r;
+}
+
+void put(PoolBase &pop, std::vector<std::string> &workload, pobj::persistent_ptr<HashTable> &map)
+{
+    for (const auto &i : workload)
+    {
+        map->Put(pop, i, i);
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -32,31 +67,32 @@ int main(int argc, char *argv[])
     std::cout << "   threads is " << threads << "\n";
     std::cout << "   batch size is " << batch << "\n";
 
-    remove(pool_file.c_str());
-    auto pop = pobj::pool<DaleaRoot>::create(pool_file, "Dalea", PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR);
-    auto r = pop.root();
-    TX::run(pop, [&]() {
-        r->map = pobj::make_persistent<HashTable>(pop);
-    });
+    auto pop = prepare_pool(pool_file, 10240);
+    auto root = prepare_root(pop);
 
-    for (long i = 0; i < batch; i++)
+    std::thread workers[threads];
+    std::vector<std::string> workload[threads];
+
+    for (auto i = 0; i < batch; i++)
     {
-        auto key = "xxxxxxxxx" + std::to_string(i);
-        auto value = "xxxxxxxxx" + std::to_string(i);
-        r->map->Put(pop, key, value);
-        // r->map->Debug();
-        // std::cout << r->map->Get(key)->value.c_str() << "\n";
-        if (i % (batch / 100) == 0)
-        {
-            std::cout << "progress: " << double(i) / batch * 100 << "%\n";
-        }
+        workload[i % threads].push_back(new_string(i));
+    }
+
+    for (auto i = 0; i < threads; i++)
+    {
+        workers[i] = std::thread(put, std::ref(pop), std::ref(workload[i]), std::ref(root->map));
+    }
+
+    for (auto &t : workers)
+    {
+        t.join();
     }
 
     for (long i = 0; i < batch; i++)
     {
-        auto key = "xxxxxxxxx" + std::to_string(i);
-        auto value = "xxxxxxxxx" + std::to_string(i);
-        auto ptr = r->map->Get(key);
+        auto key = new_string(i);
+        auto value = new_string(i);
+        auto ptr = root->map->Get(key);
         if (ptr == nullptr)
         {
             std::cout << "missing value for key " << key << "\n";
