@@ -103,6 +103,7 @@ namespace Dalea
             if (doubling_lock.try_lock())
             {
                 complex_split(pop, bkt, key, value, hv, seg, segno);
+                doubling_lock.unlock();
             }
         }
         // std::cout << "leaving" << __FUNCTION__ << "\n";
@@ -283,6 +284,7 @@ namespace Dalea
                     pre_seg->buckets[i].SetAncestor(ans);
                 }
                 pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor() : buddy_segno);
+                dir.UnlockSegment(walk);
                 continue;
             }
             dir.UnlockSegment(walk);
