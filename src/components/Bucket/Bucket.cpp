@@ -296,4 +296,22 @@ namespace Dalea
         }
     }
 
+    void Bucket::DebugTo(std::stringstream &strm, uint64_t tag) const noexcept
+    {
+        strm << "    [[ Bucket " << tag << " reporting\n";
+        strm << "       depth: " << uint64_t(GetDepth()) << "\n";
+        strm << "       keys: \n";
+        std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
+            if (kvp != nullptr)
+            {
+                strm << "       >> " << kvp->key.c_str() << "\n";
+            }
+        });
+
+        if (HasAncestor())
+        {
+            strm << "          ancestor: " << GetAncestor() << "\n";
+        }
+    }
+
 } // namespace Dalea

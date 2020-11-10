@@ -61,4 +61,12 @@ namespace Dalea
         });
     }
 
+    void Segment::DebugTo(std::stringstream &strm) const noexcept
+    {
+        strm << "[[ Segment " << segment_no << " reporting: \n";
+        uint64_t tag = 0;
+        std::for_each(std::begin(buckets), std::end(buckets), [&](const Bucket &bkt) {
+            bkt.DebugTo(strm, tag++);
+        });
+    }
 } // namespace Dalea

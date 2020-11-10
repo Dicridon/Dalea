@@ -97,18 +97,19 @@ namespace Dalea
 
     void HashTable::DebugToLog() const
     {
-        std::stringstream buf;
+        std::stringstream meta_buf;
+        std::stringstream content_buf;
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
-            buf << std::setw(4) << i << " ";
+            meta_buf << std::setw(4) << i << " ";
         }
-        buf << std::endl;
+        meta_buf << std::endl;
 
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
-            buf << std::setw(4) << dir.GetSegment(i)->segment_no << " ";
+            meta_buf << std::setw(4) << dir.GetSegment(i)->segment_no << " ";
         }
-        buf << std::endl;
+        meta_buf << std::endl;
 
         for (uint64_t j = 0; j < SEG_SIZE; j++)
         {
@@ -116,16 +117,23 @@ namespace Dalea
             {
                 if (dir.GetSegment(i)->buckets[j].HasAncestor())
                 {
-                    buf << std::setw(4) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
+                    meta_buf << std::setw(4) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
                 }
                 else
                 {
-                    buf << "     ";
+                    meta_buf << "     ";
                 }
             }
-            buf << std::endl;
+            meta_buf << std::endl;
         }
-        Log(buf);
+
+        for (uint64_t i = 0; i < (1UL << depth); i++)
+        {
+            dir.GetSegment(i)->DebugTo(content_buf);
+        }
+
+        Log(meta_buf);
+        Log(content_buf);
     }
 
     void HashTable::Log(std::string &msg) const

@@ -61,6 +61,7 @@ namespace Dalea
         void PersistAll(PoolBase &pop) const noexcept;
 
         void Debug(uint64_t tag) const noexcept;
+        void DebugTo(std::stringstream &strm, uint64_t tag) const noexcept;
 
     private:
         /*

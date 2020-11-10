@@ -29,6 +29,7 @@ namespace Dalea
         bool Recover() noexcept;
         SegmentPtr Split(PoolBase &pop, Directory &dir, uint64_t bkt_bits) noexcept;
         void Debug() const noexcept;
+        void DebugTo(std::stringstream &strm) const noexcept;
 
         // unable to use smart pointers
         pobj::p<uint64_t> segment_no;
