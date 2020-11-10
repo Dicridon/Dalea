@@ -4,6 +4,8 @@
 ./src/main.cpp: ./src/CmdParser.hpp ./src/Dalea.hpp
 ./src/components/Segment/Segment.hpp: ./src/components/Bucket/Bucket.hpp
 ./src/components/Segment/Segment.cpp: ./src/components/Segment/Segment.hpp
+./src/components/Logger/Logger.cpp: ./src/components/Logger/Logger.hpp
+./src/components/Logger/Logger.hpp: 
 ./src/components/Directory/Directory.cpp: ./src/components/Directory/Directory.hpp
 ./src/components/Directory/Directory.hpp: ./src/components/Segment/Segment.hpp
 ./src/components/KVPair/KVPair.cpp: ./src/components/KVPair/KVPair.hpp
