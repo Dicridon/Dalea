@@ -50,7 +50,7 @@ namespace Dalea
         }
 
         std::stringstream log_buf;
-        log_buf << "Searching" << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
         logger.Write(log_buf.str());
         return bkt->Get(key, hv);
     }
@@ -272,7 +272,7 @@ namespace Dalea
     {
         auto buddy_seg = dir.GetSegment(buddy_segno);
         auto buddy_bkt = &buddy_seg->buckets[bktbits];
-        bkt.Migrate(*buddy_bkt, root_segno);
+        bkt.Migrate(pop, *buddy_bkt, root_segno);
         buddy_bkt->SetMetaPersist(pop, bkt.GetDepth(), 0, (1UL << 49));
 
         auto current_depth = bkt.GetDepth();

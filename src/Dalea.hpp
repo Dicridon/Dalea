@@ -2,6 +2,8 @@
 #define __DALEA__
 #include "Directory/Directory.hpp"
 #include "Logger/Logger.hpp"
+
+#include <sstream>
 namespace Dalea
 {
     class HashTable

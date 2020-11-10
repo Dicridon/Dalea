@@ -88,21 +88,37 @@ int main(int argc, char *argv[])
         t.join();
     }
 
-    for (long i = 0; i < batch; i++)
+    bool pass = true;
+    long i = 0;
+    for (; i < batch; i++)
     {
         auto key = new_string(i);
         auto value = new_string(i);
         auto ptr = root->map->Get(key);
+        std::stringstream buf;
         if (ptr == nullptr)
         {
-            std::cout << "missing value for key " << key << "\n";
+            buf << "missing value for key " << key << "\n";
+            std::cout << buf.str();
+            root->map->Log(buf);
+            pass = false;
         }
         else if (ptr->value != value)
         {
-            std::cout << "wrong value for key " << key << "\n";
-            std::cout << "expecting " << value << "\n";
-            std::cout << "got " << ptr->value.c_str() << "\n";
+            buf << "wrong value for key " << key << "\n";
+            buf << "expecting " << value << "\n";
+            buf << "got " << ptr->value.c_str() << "\n";
+            std::cout << buf.str();
+            root->map->Log(buf);
+            pass = false;
         }
     }
-    std::cout << "single thread check passed\n";
+    if (pass)
+    {
+        std::cout << "check passed\n";
+    }
+    else
+    {
+        std::cout << "check failed\n";
+    }
 }

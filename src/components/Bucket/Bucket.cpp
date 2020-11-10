@@ -238,7 +238,7 @@ namespace Dalea
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
-    void Bucket::Migrate(Bucket &buddy, uint64_t encoding) noexcept
+    void Bucket::Migrate(PoolBase &pop, Bucket &buddy, uint64_t encoding) noexcept
     {
         uint64_t mask = (1UL << GetDepth()) - 1;
         for (int i = 0; i < BUCKET_SIZE; i++)
@@ -255,6 +255,7 @@ namespace Dalea
                 }
             }
         }
+        buddy.ClearAncestorPersist(pop);
     }
 
     void Bucket::PersistMeta(PoolBase &pop) const noexcept

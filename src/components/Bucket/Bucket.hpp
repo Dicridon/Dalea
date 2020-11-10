@@ -52,7 +52,7 @@ namespace Dalea
         // first: update metadata
         void UpdateSplitMetaPersist(PoolBase &pop) noexcept;
         // second: migrate pairs
-        void Migrate(Bucket &buddy, uint64_t encoding) noexcept;
+        void Migrate(PoolBase &pop, Bucket &buddy, uint64_t encoding) noexcept;
 
         void PersistMeta(PoolBase &pop) const noexcept;
         void PersistFingerprints(PoolBase &pop, int index) const noexcept;

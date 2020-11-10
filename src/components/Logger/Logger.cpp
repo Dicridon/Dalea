@@ -5,11 +5,13 @@ namespace Dalea
     {
         std::unique_lock l(lock);
         out_file << msg;
+        out_file.flush();
     }
 
     void Logger::Write(std::string &&msg)
     {
         std::unique_lock l(lock);
         out_file << msg;
+        out_file.flush();
     }
 }
