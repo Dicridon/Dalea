@@ -95,11 +95,44 @@ namespace Dalea
         }
     }
 
-    void HashTable::Log(std::string &msg) const noexcept
+    void HashTable::DebugToLog() const
+    {
+        std::stringstream buf;
+        for (uint64_t i = 0; i < (1UL << depth); i++)
+        {
+            buf << std::setw(4) << i << " ";
+        }
+        buf << std::endl;
+
+        for (uint64_t i = 0; i < (1UL << depth); i++)
+        {
+            buf << std::setw(4) << dir.GetSegment(i)->segment_no << " ";
+        }
+        buf << std::endl;
+
+        for (uint64_t j = 0; j < SEG_SIZE; j++)
+        {
+            for (uint64_t i = 0; i < (1UL << depth); i++)
+            {
+                if (dir.GetSegment(i)->buckets[j].HasAncestor())
+                {
+                    buf << std::setw(4) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
+                }
+                else
+                {
+                    buf << "     ";
+                }
+            }
+            buf << std::endl;
+        }
+        Log(buf);
+    }
+
+    void HashTable::Log(std::string &msg) const
     {
         logger.Write(msg);
     }
-    void HashTable::Log(std::stringstream &msg_s) const noexcept
+    void HashTable::Log(std::stringstream &msg_s) const
     {
         logger.Write(msg_s.str());
     }
@@ -248,9 +281,9 @@ namespace Dalea
     {
         SegmentPtr buddy = nullptr;
         TX::run(pop, [&]() {
-            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-            dir.AddSegment(pop, buddy, buddy_segno);
-        });
+                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+                dir.AddSegment(pop, buddy, buddy_segno);
+                });
 
         for (int i = 0; i < SEG_SIZE; i++)
         {
@@ -290,9 +323,9 @@ namespace Dalea
                 // dir.SetSegment(pop, buddy_seg, walk);
                 SegmentPtr pre_seg = nullptr;
                 TX::run(pop, [&]() {
-                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                    dir.AddSegment(pop, pre_seg, walk);
-                });
+                        pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                        dir.AddSegment(pop, pre_seg, walk);
+                        });
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
                     auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor() : walk_ptr->segment_no.get_ro();

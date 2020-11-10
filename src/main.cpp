@@ -120,5 +120,6 @@ int main(int argc, char *argv[])
     else
     {
         std::cout << "check failed\n";
+        root->map->DebugToLog();
     }
 }

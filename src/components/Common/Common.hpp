@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-// #define DEBUG
+#define DEBUG
 namespace Dalea
 {
     using String = std::string;
