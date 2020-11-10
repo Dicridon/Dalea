@@ -1,12 +1,13 @@
 #ifndef __DALEA__
 #define __DALEA__
 #include "Directory/Directory.hpp"
+#include "Logger/Logger.hpp"
 namespace Dalea
 {
     class HashTable
     {
     public:
-        HashTable(PoolBase &pop) : dir(pop), depth(1){};
+        HashTable(PoolBase &pop) : dir(pop), depth(1), logger(std::string("./dalea.log")) {};
         HashTable() = delete;
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
@@ -21,6 +22,7 @@ namespace Dalea
         uint8_t depth;
         Directory dir;
         std::shared_mutex doubling_lock;
+        mutable Logger logger;
 
         void split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
         void simple_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept;

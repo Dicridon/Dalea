@@ -11,10 +11,12 @@ namespace Dalea
     class Logger
     {
     public:
-        Logger(std::string &log_file) : out_file(log_file) {}
+        Logger(const std::string &log_file) : out_file(log_file) {}
+        Logger(std::string &&log_file) : out_file(log_file) {}
         ~Logger() = default;
 
-        void Write(std::string &msg);
+        void Write(const std::string &msg);
+        void Write(std::string &&msg);
 
     private:
         std::ofstream out_file;

@@ -1,4 +1,4 @@
-./src/Dalea.hpp: ./src/components/Directory/Directory.hpp
+./src/Dalea.hpp: ./src/components/Directory/Directory.hpp ./src/components/Logger/Logger.hpp
 ./src/CmdParser.hpp: 
 ./src/Dalea.cpp: ./src/Dalea.hpp
 ./src/main.cpp: ./src/CmdParser.hpp ./src/Dalea.hpp

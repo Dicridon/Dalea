@@ -15,7 +15,9 @@ namespace Dalea
             bkt = &seg->buckets[hv.BucketBits()];
         }
 
-        // std::cout << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        std::stringstream log_buf;
+        log_buf << "Putting " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        logger.Write(log_buf.str());
 
         auto ret = bkt->Put(pop, key, value, hv, seg->segment_no);
         switch (ret)
@@ -46,6 +48,10 @@ namespace Dalea
             seg = dir.GetSegment(bkt->GetAncestor());
             bkt = &seg->buckets[hv.BucketBits()];
         }
+
+        std::stringstream log_buf;
+        log_buf << "Searching" << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        logger.Write(log_buf.str());
         return bkt->Get(key, hv);
     }
 
