@@ -17,6 +17,8 @@ namespace Dalea
         FunctionStatus Remove(PoolBase &pop, const std::string &key) noexcept;
         void Destory() noexcept;
         void Debug() const noexcept;
+        void Log(std::string &msg) const noexcept;
+        void Log(std::stringstream &msg_s) const noexcept;
 
     private:
         uint8_t depth;

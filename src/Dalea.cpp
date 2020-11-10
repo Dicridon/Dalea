@@ -95,6 +95,15 @@ namespace Dalea
         }
     }
 
+    void HashTable::Log(std::string &msg) const noexcept
+    {
+        logger.Write(msg);
+    }
+    void HashTable::Log(std::stringstream &msg_s) const noexcept
+    {
+        logger.Write(msg_s.str());
+    }
+
     void HashTable::split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
