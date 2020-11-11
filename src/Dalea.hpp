@@ -9,7 +9,7 @@ namespace Dalea
     class HashTable
     {
     public:
-        HashTable(PoolBase &pop) : dir(pop), depth(1), logger(std::string("./dalea.log")) {};
+        HashTable(PoolBase &pop) : dir(pop), depth(1), doubling(false), logger(std::string("./dalea.log")) {};
         HashTable() = delete;
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
@@ -20,11 +20,13 @@ namespace Dalea
         void Destory() noexcept;
         void Debug() const noexcept;
         void DebugToLog() const;
+        void Log(std::string msg) const;
         void Log(std::string &msg) const;
         void Log(std::stringstream &msg_s) const;
 
     private:
         uint8_t depth;
+        bool doubling;
         Directory dir;
         std::shared_mutex doubling_lock;
         mutable Logger logger;

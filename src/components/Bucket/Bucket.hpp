@@ -1,6 +1,7 @@
 #ifndef __DALEA__BUCKET__BUCKET__
 #define __DALEA__BUCKET__BUCKET__
 #include "KVPair/KVPair.hpp"
+#include "Logger/Logger.hpp"
 
 #include <shared_mutex>
 namespace Dalea
@@ -18,6 +19,7 @@ namespace Dalea
 
         KVPairPtr Get(const String &key, const HashValue &hash_value) const noexcept;
         FunctionStatus Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept;
+        FunctionStatus Put(Logger &logger, PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept;
         FunctionStatus Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
 
         void Lock() noexcept;

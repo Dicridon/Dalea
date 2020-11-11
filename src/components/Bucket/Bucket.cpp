@@ -80,6 +80,65 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
+    FunctionStatus Bucket::Put(Logger &logger, PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
+    {
+        if (HasAncestor())
+        {
+            std::string msg {"Ancestor detected\n"};
+            logger.Write(msg);
+            return FunctionStatus::FlattenRequired;
+        }
+
+        std::unique_lock exc(*mux);
+        int slot = -1;
+        auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
+        for (auto search = 0; search < BUCKET_SIZE; search++)
+        {
+            auto iter = std::to_string(search);
+            auto msg = "in looping " + iter + "\n";
+            logger.Write(msg);
+            // the later condition is used for lazy deletion, also postpone splitting as much as possible
+            auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
+            if (fingerprints[search].IsInvalid() || f != encoding)
+            {
+                std::string msg {"empty slot found\n"};
+                logger.Write(msg);
+                slot = search;
+            }
+            if (fingerprints[search] == hash_value)
+            {
+                std::string msg {"duplicated fingerprint detected\n"};
+                logger.Write(msg);
+                if (pairs[search]->key == key)
+                {
+                    std::string msg {"updating\n"};
+                    logger.Write(msg);
+                    TX::manual tx(pop);
+                    pairs[search]->value = value;
+                    TX::commit();
+                    return FunctionStatus::Ok;
+                }
+            }
+        }
+        if (slot == -1)
+        {
+            return FunctionStatus::SplitRequired;
+        }
+        TX::run(pop, [&]() {
+                auto pair = pmem::obj::make_persistent<KVPair>(
+                        key,
+                        value);
+                pairs[slot] = pair;
+                fingerprints[slot] = hash_value;
+                });
+
+        std::string msg {"putting finished\n"};
+        logger.Write(msg);
+        return FunctionStatus::Ok;
+    }
+
+
+
     FunctionStatus Bucket::Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
     {
         return FunctionStatus::Ok;
@@ -284,11 +343,11 @@ namespace Dalea
         std::cout << "       depth: " << uint64_t(GetDepth()) << "\n";
         std::cout << "       keys: \n";
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
-            if (kvp != nullptr)
-            {
+                if (kvp != nullptr)
+                {
                 std::cout << "       >> " << kvp->key.c_str() << "\n";
-            }
-        });
+                }
+                });
 
         if (HasAncestor())
         {
@@ -302,11 +361,11 @@ namespace Dalea
         strm << "       depth: " << uint64_t(GetDepth()) << "\n";
         strm << "       keys: \n";
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
-            if (kvp != nullptr)
-            {
+                if (kvp != nullptr)
+                {
                 strm << "       >> " << kvp->key.c_str() << "\n";
-            }
-        });
+                }
+                });
 
         if (HasAncestor())
         {
