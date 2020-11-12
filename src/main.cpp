@@ -39,9 +39,17 @@ auto prepare_root(pobj::pool<DaleaRoot> &pop)
 
 void put(PoolBase &pop, std::vector<std::string> &workload, pobj::persistent_ptr<HashTable> &map)
 {
-    for (const auto &i : workload)
+    // for (const auto &i : workload)
+    // {
+    //     map->Put(pop, i, i);
+    // }
+    for (auto i = 0; i < workload.size(); i++)
     {
-        map->Put(pop, i, i);
+        if (i % 100000 == 0)
+        {
+            std::cout << "Progress: " << double(i) / workload.size() * 100 << "%\n";
+        }
+        map->Put(pop, workload[i], workload[i]);
     }
 }
 

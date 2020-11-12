@@ -13,9 +13,9 @@ namespace Dalea
         }
         mux = new std::shared_mutex;
     }
+
     KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value) const noexcept
     {
-        std::shared_lock shr(*mux);
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
@@ -44,12 +44,6 @@ namespace Dalea
             return FunctionStatus::FlattenRequired;
         }
 
-        // std::unique_lock exc(*mux);
-        if (!mux->try_lock())
-        {
-            // prevent a split
-            return FunctionStatus::Retry;
-        }
         int slot = -1;
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         for (auto search = 0; search < BUCKET_SIZE; search++)
@@ -67,14 +61,12 @@ namespace Dalea
                     TX::manual tx(pop);
                     pairs[search]->value = value;
                     TX::commit();
-                    mux->unlock();
                     return FunctionStatus::Ok;
                 }
             }
         }
         if (slot == -1)
         {
-            mux->unlock();
             return FunctionStatus::SplitRequired;
         }
         TX::run(pop, [&]() {
@@ -84,7 +76,6 @@ namespace Dalea
                 pairs[slot] = pair;
                 fingerprints[slot] = hash_value;
                 });
-        mux->unlock();
         return FunctionStatus::Ok;
     }
 
@@ -92,62 +83,57 @@ namespace Dalea
     {
         if (HasAncestor())
         {
-            std::string msg {"Ancestor detected\n"};
-            logger.Write(msg);
+            std::stringstream buf;
+            buf << "Ancestor detected " << GetAncestor() << " in" << this <<  "\n";
+            logger.Write(buf.str());
             return FunctionStatus::FlattenRequired;
         }
 
-        // std::unique_lock exc(*mux);
-        if (!mux->try_lock())
-        {
-            return FunctionStatus::Retry;
-        }
-        else
-        {
-            std::stringstream buf;
-            buf << ">>>> Bucket (" << segno << ", " << hash_value.BucketBits() << ") locked\n";
-            logger.Write(buf.str());
-        }
         int slot = -1;
         auto encoding = segno & (((1UL << GetDepth()) - 1));
         auto id = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         if (id != encoding)
         {
-            mux->unlock();
             return FunctionStatus::Retry;
         }
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
             auto iter = std::to_string(search);
+#ifdef LOGGING
             auto msg = ">>>> in looping " + iter + "\n";
             logger.Write(msg);
+#endif
             // the later condition is used for lazy deletion, also postpone splitting as much as possible
             auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
             if (fingerprints[search].IsInvalid() || f != encoding)
             {
+#ifdef LOGGING
                 std::string msg {">>>> empty slot found\n"};
                 logger.Write(msg);
+#endif
                 slot = search;
             }
             if (fingerprints[search] == hash_value)
             {
+#ifdef LOGGING
                 std::string msg {">>>> duplicated fingerprint detected\n"};
                 logger.Write(msg);
+#endif
                 if (pairs[search]->key == key)
                 {
+#ifdef LOGGING
                     std::string msg {">>>> updating\n"};
                     logger.Write(msg);
+#endif
                     TX::manual tx(pop);
                     pairs[search]->value = value;
                     TX::commit();
-                    mux->unlock();
                     return FunctionStatus::Ok;
                 }
             }
         }
         if (slot == -1)
         {
-            mux->unlock();
             return FunctionStatus::SplitRequired;
         }
         TX::run(pop, [&]() {
@@ -157,10 +143,10 @@ namespace Dalea
                 pairs[slot] = pair;
                 fingerprints[slot] = hash_value;
                 });
-
+#ifdef LOGGING
         std::string msg {">>>> putting finished\n"};
         logger.Write(msg);
-        mux->unlock();
+#endif
         return FunctionStatus::Ok;
     }
 

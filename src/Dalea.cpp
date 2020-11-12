@@ -2,7 +2,6 @@
 #include <iomanip>
 
 #define LINE {Log(std::to_string(__LINE__) + "\n");}
-#define LOCK_DEBUG
 namespace Dalea
 {
     FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
@@ -12,55 +11,68 @@ namespace Dalea
 
         // make sure there is no doubling thread
     RETRY:
-        doubling_lock.lock_shared();
-        // doubling_lock.lock();
-        // logger.Write("locked in Put\n");
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
 
+#ifdef LOGGING
+        std::stringstream log_buf; 
+        log_buf << "first putting " << key << "(" << std::hex << hv.GetRaw() << std::dec <<  ")" << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) <<"\n";
+        Log(log_buf);
+        log_buf << "bucket is " << bkt << "\n";
+        Log(log_buf);
+#endif
         if (bkt->HasAncestor())
         {
             seg = dir.GetSegment(bkt->GetAncestor());
             bkt = &seg->buckets[hv.BucketBits()];
+#ifdef LOCK_DEBUG
+            log_buf << ">#< changing putting " << key << "(" << std::hex << hv.GetRaw() << std::dec <<  ")" << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) <<"\n";
+            Log(log_buf);
+            log_buf << ">#< bucket is " << bkt << "\n";
+            Log(log_buf);
+#endif
         }
-
-        std::stringstream log_buf; LINE; 
-        log_buf << "Doubling locked "<< "putting " << key << "(" << std::hex << hv.GetRaw() << std::dec <<  ")" << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) <<"\n"; LINE;
-        logger.Write(log_buf.str()); LINE;
-
-        auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no); LINE;
+#ifdef LOGGING
+        else
+        {
+            log_buf << ">#< no ancestor detected\n";
+            Log(log_buf);
+        }
+#endif
+        auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no);
         switch (ret)
         {
         case FunctionStatus::Retry:
         {
-            doubling_lock.unlock_shared();
+#ifdef LOGGING
             std::stringstream buf;
             buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Retry\n";
             Log(buf);
+#endif
         }
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
-            doubling_lock.unlock_shared();
+#ifdef LOGGING
             std::stringstream buf;
             buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in SplitRequired\n";
             Log(buf);
+#endif
             // lock is acquired inside split depending on global depth
             split(pop, *bkt, hv, seg, seg->segment_no);
         }
             goto RETRY;
         case FunctionStatus::FlattenRequired:
         {
-            // flatten_bucket(pop, *bkt, hv, seg->segment_no);
-            // doubling_lock.unlock_shared();
             // fall through
         }
         default:
         {
-            doubling_lock.unlock_shared();
+#ifdef LOGGING
             std::stringstream buf;
             buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Default\n";
             Log(buf);
+#endif
         }
             return ret;
         }
@@ -71,15 +83,21 @@ namespace Dalea
         auto hv = HashValue(std::hash<std::string>{}(key));
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
+#ifdef LOGGING
+        std::stringstream log_buf;
+        log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+#endif
         if (bkt->HasAncestor())
         {
             seg = dir.GetSegment(bkt->GetAncestor());
             bkt = &seg->buckets[hv.BucketBits()];
+#ifdef LOGGING
+            log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+#endif
         }
-
-        std::stringstream log_buf;
-        log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+#ifdef LOGGING
         logger.Write(log_buf.str());
+#endif
         return bkt->Get(key, hv);
     }
 
@@ -177,6 +195,7 @@ namespace Dalea
     void HashTable::Log(std::stringstream &msg_s) const
     {
         logger.Write(msg_s.str());
+        msg_s.str("");
     }
 
     void HashTable::split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
@@ -185,24 +204,11 @@ namespace Dalea
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
-            std::shared_lock l(doubling_lock);
-            logger.Write("locking in simple split\n");
             simple_split(pop, bkt, hv, segno, false);
-            logger.Write("unlocking in simple split\n");
         }
         else
         {
-            if (doubling_lock.try_lock())
-            {
-                logger.Write(">> starts doubling\n");
-                complex_split(pop, bkt, hv, seg, segno);
-                logger.Write(">> doubling finished\n");
-                doubling_lock.unlock();
-            }
-            else
-            {
-                logger.Write("failed competing doubling lock\n");
-            }
+            complex_split(pop, bkt, hv, seg, segno);
         }
         // std::cout << "leaving" << __FUNCTION__ << "\n";
     }
@@ -231,23 +237,6 @@ namespace Dalea
     void HashTable::simple_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
         // std::cout << "entering " << __FUNCTION__ << "\n";
-        /*
-         * exclusive access to one bucket
-         */
-        if (!bkt.TryLock())
-        {
-            std::stringstream buf;
-            buf << "locking bkt (" << segno << ", " << hv.BucketBits() << ") failed\n";
-            Log(buf);
-            return;
-        }
-        else
-        {
-            std::stringstream buf;
-            buf << "locking bkt (" << segno << ", " << hv.BucketBits() << ") locked\n";
-            Log(buf);
-            Log("simple splitting\n");
-        }
 
         auto prev_depth = bkt.GetDepth();
         if (helper)
@@ -264,16 +253,12 @@ namespace Dalea
         auto buddy_segno = root_segno | (1UL << prev_depth);
         auto bktbits = hv.BucketBits();
         auto root = dir.GetSegment(root_segno);
-        dir.LockSegment(buddy_segno);
         if (root == dir.GetSegment(buddy_segno))
         {
             make_buddy_segment(pop, root, segno, buddy_segno, bkt);
         }
-        dir.UnlockSegment(buddy_segno);
 
         migrate_and_pave(pop, root_segno, buddy_segno, bkt, bktbits);
-        Log("simple splitting finished\n");
-        bkt.Unlock();
         // std::cout << "leaving " << __FUNCTION__ << "\n";
     }
 
@@ -377,7 +362,6 @@ namespace Dalea
         {
             walk += (1UL << current_depth);
             walk_ptr = dir.GetSegment(walk);
-            dir.LockSegment(walk);
             if (walk_ptr->segment_no != walk)
             {
                 // a reference pointer pointing to one ancestor
@@ -393,10 +377,8 @@ namespace Dalea
                     pre_seg->buckets[i].SetAncestor(ans);
                 }
                 pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor() : buddy_segno);
-                dir.UnlockSegment(walk);
                 continue;
             }
-            dir.UnlockSegment(walk);
 
             if (dir.GetSegment(walk) == dir.GetSegment(buddy_segno))
             {

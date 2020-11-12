@@ -11,7 +11,9 @@
 #include <vector>
 #include <sstream>
 
-#define DEBUG
+// #define LOGGING
+// #define DEBUG
+
 namespace Dalea
 {
     using String = std::string;
