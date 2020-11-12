@@ -2,6 +2,7 @@
 #include <iomanip>
 
 #define LINE {Log(std::to_string(__LINE__) + "\n");}
+#define LOCK_DEBUG
 namespace Dalea
 {
     FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
@@ -11,8 +12,8 @@ namespace Dalea
 
         // make sure there is no doubling thread
     RETRY:
-        // doubling_lock.lock_shared();
-        doubling_lock.lock();
+        doubling_lock.lock_shared();
+        // doubling_lock.lock();
         // logger.Write("locked in Put\n");
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
@@ -24,7 +25,7 @@ namespace Dalea
         }
 
         std::stringstream log_buf; LINE; 
-        log_buf << "Locked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") puting " << key << "\n"; LINE;
+        log_buf << "Doubling locked "<< "putting " << key << "(" << std::hex << hv.GetRaw() << std::dec <<  ")" << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) <<"\n"; LINE;
         logger.Write(log_buf.str()); LINE;
 
         auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no); LINE;
@@ -32,19 +33,17 @@ namespace Dalea
         {
         case FunctionStatus::Retry:
         {
-            // doubling_lock.unlock_shared();
-            doubling_lock.unlock();
+            doubling_lock.unlock_shared();
             std::stringstream buf;
-            buf << "Unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Retry\n";
+            buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Retry\n";
             Log(buf);
         }
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
-            // doubling_lock.unlock_shared();
-            doubling_lock.unlock();
+            doubling_lock.unlock_shared();
             std::stringstream buf;
-            buf << "Unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in SplitRequired\n";
+            buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in SplitRequired\n";
             Log(buf);
             // lock is acquired inside split depending on global depth
             split(pop, *bkt, hv, seg, seg->segment_no);
@@ -58,10 +57,9 @@ namespace Dalea
         }
         default:
         {
-            // doubling_lock.unlock_shared();
-            doubling_lock.unlock();
+            doubling_lock.unlock_shared();
             std::stringstream buf;
-            buf << "Unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Default\n";
+            buf << "Doubling unlocked "<< " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Default\n";
             Log(buf);
         }
             return ret;
@@ -131,13 +129,13 @@ namespace Dalea
         std::stringstream content_buf;
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
-            meta_buf << std::setw(4) << i << " ";
+            meta_buf << std::setw(2) << i << " ";
         }
         meta_buf << std::endl;
 
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
-            meta_buf << std::setw(4) << dir.GetSegment(i)->segment_no << " ";
+            meta_buf << std::setw(2) << dir.GetSegment(i)->segment_no << " ";
         }
         meta_buf << std::endl;
 
@@ -147,11 +145,11 @@ namespace Dalea
             {
                 if (dir.GetSegment(i)->buckets[j].HasAncestor())
                 {
-                    meta_buf << std::setw(4) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
+                    meta_buf << std::setw(2) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
                 }
                 else
                 {
-                    meta_buf << "     ";
+                    meta_buf << "   ";
                 }
             }
             meta_buf << std::endl;
@@ -188,9 +186,9 @@ namespace Dalea
         if (local_depth < depth)
         {
             std::shared_lock l(doubling_lock);
-            logger.Write("locking in simple split");
+            logger.Write("locking in simple split\n");
             simple_split(pop, bkt, hv, segno, false);
-            logger.Write("unlocking in simple split");
+            logger.Write("unlocking in simple split\n");
         }
         else
         {
@@ -245,6 +243,9 @@ namespace Dalea
         }
         else
         {
+            std::stringstream buf;
+            buf << "locking bkt (" << segno << ", " << hv.BucketBits() << ") locked\n";
+            Log(buf);
             Log("simple splitting\n");
         }
 
