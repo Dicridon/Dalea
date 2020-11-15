@@ -44,11 +44,12 @@ void put(PoolBase &pop, std::vector<std::string> &workload, pobj::persistent_ptr
     //     map->Put(pop, i, i);
     // }
     for (auto i = 0; i < workload.size(); i++)
-    {
+     {
         if (i % 100000 == 0)
         {
             std::cout << "Progress: " << double(i) / workload.size() * 100 << "%\n";
         }
+        // std::cout << workload[i] << "\n";
         map->Put(pop, workload[i], workload[i]);
     }
 }

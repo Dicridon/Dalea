@@ -41,7 +41,7 @@ namespace Dalea
         {
             seg = dir.GetSegment(ans.value());
             bkt = &seg->buckets[hv.BucketBits()];
-#if defined(LOCK_DEBUG) && defined(LOGGING)
+#ifdef LOGGING
             log_buf << ">#< changing putting " << key << "(" << std::hex << hv.GetRaw() << std::dec << ")"
                     << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) << "\n";
             Log(log_buf);
