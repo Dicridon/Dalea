@@ -11,8 +11,8 @@
 #include <vector>
 #include <sstream>
 
-// #define LOGGING
-// #define DEBUG
+#define LOGGING
+#define DEBUG
 
 namespace Dalea
 {

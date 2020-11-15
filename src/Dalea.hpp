@@ -10,7 +10,7 @@ namespace Dalea
     class HashTable
     {
     public:
-        HashTable(PoolBase &pop) : dir(pop), depth(1), to_double(false), logger(std::string("./dalea.log")) {};
+        HashTable(PoolBase &pop) : dir(pop), depth(1), to_double(false), readers(0), logger(std::string("./dalea.log")) {};
         HashTable() = delete;
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
@@ -31,7 +31,7 @@ namespace Dalea
         Directory dir;
 
         std::atomic_bool to_double;
-        std::shared_mutex reader_lock;
+        std::atomic_int readers;;
         std::shared_mutex doubling_lock;
         mutable Logger logger;
 

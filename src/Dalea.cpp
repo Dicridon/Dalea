@@ -20,7 +20,8 @@ namespace Dalea
             goto RETRY;
         }
 
-        std::shared_lock _(reader_lock);
+        //reader_lock.lock_shared();
+        ++readers;
 
         // starts trying put
         auto pos = hv.SegmentBits(depth);
@@ -54,13 +55,16 @@ namespace Dalea
             log_buf << ">#< no ancestor detected\n";
             Log(log_buf);
         }
-        auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no);
-#else
+#endif
         if (!bkt->TryLock())
         {
-            reader_lock.unlock_shared();
+            // reader_lock.unlock_shared();
+            --readers;
             goto RETRY;
         }
+#ifdef LOGGING
+        auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no);
+#else
         auto ret = bkt->Put(pop, key, value, hv, seg->segment_no);
 #endif
         switch (ret)
@@ -69,27 +73,30 @@ namespace Dalea
         {
 #ifdef LOGGING
             std::stringstream buf;
-            buf << "Doubling unlocked "
+            buf << "Reader lock unlocked "
                 << " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Retry\n";
             Log(buf);
 #endif
         }
             bkt->Unlock();
-            reader_lock.unlock_shared();
+            //reader_lock.unlock_shared();
+            --readers;
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
+            // lock is acquired inside split depending on global depth
+            split(pop, *bkt, hv, seg, seg->segment_no);
+
 #ifdef LOGGING
             std::stringstream buf;
-            buf << "Doubling unlocked "
+            buf << "Reader lock unlocked "
                 << " (" << seg->segment_no << ", " << hv.BucketBits() << ") in SplitRequired\n";
             Log(buf);
 #endif
-            // lock is acquired inside split depending on global depth
-            split(pop, *bkt, hv, seg, seg->segment_no);
         }
             bkt->Unlock();
-            reader_lock.unlock_shared();
+            // reader_lock.unlock_shared();
+            --readers;
             goto RETRY;
         case FunctionStatus::FlattenRequired:
         {
@@ -99,13 +106,14 @@ namespace Dalea
         {
 #ifdef LOGGING
             std::stringstream buf;
-            buf << "Doubling unlocked "
+            buf << "Reader lock unlocked "
                 << " (" << seg->segment_no << ", " << hv.BucketBits() << ") in Default\n";
             Log(buf);
 #endif
         }
             bkt->Unlock();
-            reader_lock.unlock_shared();
+            // reader_lock.unlock_shared();
+            --readers;
             return ret;
         }
     }
@@ -236,6 +244,9 @@ namespace Dalea
      */
     void HashTable::split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
+#ifdef LOGGING
+        Log(">>>> entering split\n");
+#endif
         auto local_depth = bkt.GetDepth();
         if (local_depth < depth)
         {
@@ -244,19 +255,33 @@ namespace Dalea
         }
         else
         {
-            to_double = true;
+#ifdef LOGGING
+            Log(">>>> to complex split ");
+#endif
+            auto expected = false;
+            to_double.compare_exchange_strong(expected, true);
+            if (expected)
+            {
+                return;
+            }
 
-            // no readers exsit
-            while(!reader_lock.try_lock());
-            reader_lock.unlock();
+            // complex split thread is the only reader;
+            while(readers != 1);
+
             if (!doubling_lock.try_lock())
             {
+#ifdef LOGGING
+                Log(">>>> leaving split\n");
+#endif
                 return;
             }
             complex_split(pop, bkt, hv, seg, segno);
             doubling_lock.unlock();
             to_double = false;
         }
+#ifdef LOGGING
+            Log(">>>> leaving split\n");
+#endif
     }
 
     /*
@@ -282,6 +307,10 @@ namespace Dalea
      */
     void HashTable::simple_split(PoolBase &pop, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
     {
+#ifdef LOGGING
+        Log(">>>> entering simple_split\n");
+#endif
+
         auto buddy_seg = dir.GetSegment(buddy_segno);
         auto buddy_bkt = &buddy_seg->buckets[bktbits];
 
@@ -340,6 +369,9 @@ namespace Dalea
          * splitting bucket is connecting descendants of buddy bucket to it. 
          */
         buddy_bkt->Unlock();
+#ifdef LOGGING
+        Log(">>>> leaving simple_split\n");
+#endif
     }
 
     /*
@@ -349,6 +381,9 @@ namespace Dalea
      */
     void HashTable::traditional_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
+#ifdef LOGGING
+        Log("entering traditional_split\n");
+#endif
         auto prev_depth = bkt.GetDepth();
         if (helper)
         {
@@ -374,6 +409,9 @@ namespace Dalea
         dir.UnlockSegment(buddy_segno);
 
         simple_split(pop, root_segno, buddy_segno, bkt, bktbits);
+#ifdef LOGGING
+        Log("leaving traditional_split\n");
+#endif
     }
 
     /*
@@ -389,6 +427,9 @@ namespace Dalea
      */
     void HashTable::complex_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
+#ifdef LOGGING
+        Log("entering complex_split\n");
+#endif
         /* 
          * bucket depth would not be changed during a doubling
          * becaused all puts to this bucket result in 
@@ -418,6 +459,9 @@ namespace Dalea
         ++depth;
         pmemobj_persist(pop.handle(), &depth, sizeof(depth));
         bkt.ClearSplit();
+#ifdef LOGGING
+        Log("leaving complex_split\n");
+#endif
     }
 
     /*
