@@ -41,32 +41,44 @@ namespace Dalea
         return GetSegment(hv.SegmentBits(depth));
     }
 
-    void Directory::LockSegment(uint64_t pos) noexcept
+    const SegmentPtr Directory::LockSegment(uint64_t pos) noexcept
     {
         auto sub = pos / SUBDIR_SIZE;
         auto seg = pos % SUBDIR_SIZE;
         meta.subdirectories[sub]->mutexes[seg].lock();
+        return meta.subdirectories[sub]->segments[seg];
     }
 
-    void Directory::LockSegmentShared(uint64_t pos) noexcept
+    const SegmentPtr Directory::LockSegment(const HashValue &hv, uint64_t depth) noexcept
+    {
+        return LockSegment(hv.SegmentBits(depth));
+    }
+
+    const SegmentPtr Directory::LockSegmentShared(uint64_t pos) noexcept
     {
         auto sub = pos / SUBDIR_SIZE;
         auto seg = pos % SUBDIR_SIZE;
         meta.subdirectories[sub]->mutexes[seg].lock_shared();
+        return meta.subdirectories[sub]->segments[seg];
     }
 
-    void Directory::TryLockSegment(uint64_t pos) noexcept
+    const SegmentPtr Directory::LockSegmentShared(const HashValue &hv, uint64_t depth) noexcept
+    {
+        return LockSegmentShared(hv.SegmentBits(depth));
+    }
+
+    bool Directory::TryLockSegment(uint64_t pos) noexcept
     {
         auto sub = pos / SUBDIR_SIZE;
         auto seg = pos % SUBDIR_SIZE;
-        meta.subdirectories[sub]->mutexes[seg].try_lock();
+        return meta.subdirectories[sub]->mutexes[seg].try_lock();
     }
 
-    void Directory::TryLockSegmentShared(uint64_t pos) noexcept
+    bool Directory::TryLockSegmentShared(uint64_t pos) noexcept
     {
         auto sub = pos / SUBDIR_SIZE;
         auto seg = pos % SUBDIR_SIZE;
-        meta.subdirectories[sub]->mutexes[seg].try_lock_shared();
+        return meta.subdirectories[sub]->mutexes[seg].try_lock_shared();
     }
 
     void Directory::UnlockSegment(uint64_t pos) noexcept

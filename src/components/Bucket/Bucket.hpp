@@ -4,8 +4,14 @@
 #include "Logger/Logger.hpp"
 
 #include <shared_mutex>
+#include <optional>
 namespace Dalea
 {
+
+    /*
+     * Attention: This class is not responsible for concurrency control, 
+     *            no lock would be automatically held by any operation
+     */
     struct Bucket
     {
         Bucket();
@@ -32,7 +38,7 @@ namespace Dalea
         bool HasAncestor() const noexcept;
         void SetAncestor(int64_t an) noexcept;
         void SetAncestorPersist(PoolBase &pop, int64_t an) noexcept;
-        uint64_t GetAncestor() const noexcept;
+        std::optional<uint64_t> GetAncestor() const noexcept;
         void ClearAncestor() noexcept;
         void ClearAncestorPersist(PoolBase &pop) noexcept;
 

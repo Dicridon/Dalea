@@ -16,6 +16,7 @@ namespace Dalea
 
     KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value) const noexcept
     {
+        std::shared_lock s(*mux);
         auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
@@ -45,7 +46,18 @@ namespace Dalea
         }
 
         int slot = -1;
-        auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
+        auto mask = ((1UL << GetDepth()) - 1);
+        auto encoding = hash_value.GetRaw() & mask; // (((1UL << GetDepth()) - 1));
+        auto tag = segno & mask;
+        /* 
+         * access to a splitting bucket and then obtained a lock, however the split has finished
+         * tag may have changed
+         */
+        if (tag != encoding)
+        {
+            return FunctionStatus::Retry;
+        }
+
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
             // the later condition is used for lazy deletion, also postpone splitting as much as possible
@@ -70,12 +82,12 @@ namespace Dalea
             return FunctionStatus::SplitRequired;
         }
         TX::run(pop, [&]() {
-                auto pair = pmem::obj::make_persistent<KVPair>(
-                        key,
-                        value);
-                pairs[slot] = pair;
-                fingerprints[slot] = hash_value;
-                });
+            auto pair = pmem::obj::make_persistent<KVPair>(
+                key,
+                value);
+            pairs[slot] = pair;
+            fingerprints[slot] = hash_value;
+        });
         return FunctionStatus::Ok;
     }
 
@@ -84,18 +96,24 @@ namespace Dalea
         if (HasAncestor())
         {
             std::stringstream buf;
-            buf << "Ancestor detected " << GetAncestor() << " in" << this <<  "\n";
+            buf << "Ancestor detected " << GetAncestor().value() << " in" << this << "\n";
             logger.Write(buf.str());
             return FunctionStatus::FlattenRequired;
         }
 
         int slot = -1;
-        auto encoding = segno & (((1UL << GetDepth()) - 1));
-        auto id = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
-        if (id != encoding)
+        auto mask = ((1UL << GetDepth()) - 1);
+        auto encoding = hash_value.GetRaw() & mask; // (((1UL << GetDepth()) - 1));
+        auto tag = segno & mask;
+        /* 
+         * access to a splitting bucket and then obtained a lock, however the split has finished
+         * tag may have changed
+         */
+        if (tag != encoding)
         {
             return FunctionStatus::Retry;
         }
+
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
             auto iter = std::to_string(search);
@@ -108,7 +126,7 @@ namespace Dalea
             if (fingerprints[search].IsInvalid() || f != encoding)
             {
 #ifdef LOGGING
-                std::string msg {">>>> empty slot found\n"};
+                std::string msg{">>>> empty slot found\n"};
                 logger.Write(msg);
 #endif
                 slot = search;
@@ -116,13 +134,13 @@ namespace Dalea
             if (fingerprints[search] == hash_value)
             {
 #ifdef LOGGING
-                std::string msg {">>>> duplicated fingerprint detected\n"};
+                std::string msg{">>>> duplicated fingerprint detected\n"};
                 logger.Write(msg);
 #endif
                 if (pairs[search]->key == key)
                 {
 #ifdef LOGGING
-                    std::string msg {">>>> updating\n"};
+                    std::string msg{">>>> updating\n"};
                     logger.Write(msg);
 #endif
                     TX::manual tx(pop);
@@ -137,20 +155,18 @@ namespace Dalea
             return FunctionStatus::SplitRequired;
         }
         TX::run(pop, [&]() {
-                auto pair = pmem::obj::make_persistent<KVPair>(
-                        key,
-                        value);
-                pairs[slot] = pair;
-                fingerprints[slot] = hash_value;
-                });
+            auto pair = pmem::obj::make_persistent<KVPair>(
+                key,
+                value);
+            pairs[slot] = pair;
+            fingerprints[slot] = hash_value;
+        });
 #ifdef LOGGING
-        std::string msg {">>>> putting finished\n"};
+        std::string msg{">>>> putting finished\n"};
         logger.Write(msg);
 #endif
         return FunctionStatus::Ok;
     }
-
-
 
     FunctionStatus Bucket::Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept
     {
@@ -207,13 +223,14 @@ namespace Dalea
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
-    uint64_t Bucket::GetAncestor() const noexcept
+    std::optional<uint64_t> Bucket::GetAncestor() const noexcept
     {
-        if (!HasAncestor())
+        auto tmp = metainfo;
+        if (!tmp.has_ancestor)
         {
-            return -1;
+            return {};
         }
-        return metainfo.ancestor;
+        return {uint64_t(tmp.ancestor)};
     }
 
     void Bucket::ClearAncestor() noexcept
@@ -246,7 +263,6 @@ namespace Dalea
     void Bucket::IncDepthPersist(PoolBase &pop) noexcept
     {
         metainfo.local_depth += 1;
-
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
@@ -263,7 +279,6 @@ namespace Dalea
     void Bucket::SetSplitPersist(PoolBase &pop) noexcept
     {
         metainfo.split_flag = 1;
-
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
@@ -356,15 +371,15 @@ namespace Dalea
         std::cout << "       depth: " << uint64_t(GetDepth()) << "\n";
         std::cout << "       keys: \n";
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
-                if (kvp != nullptr)
-                {
+            if (kvp != nullptr)
+            {
                 std::cout << "       >> " << kvp->key.c_str() << "\n";
-                }
-                });
+            }
+        });
 
         if (HasAncestor())
         {
-            std::cout << "          ancestor: " << GetAncestor() << "\n";
+            std::cout << "          ancestor: " << GetAncestor().value() << "\n";
         }
     }
 
@@ -374,15 +389,15 @@ namespace Dalea
         strm << "       depth: " << uint64_t(GetDepth()) << "\n";
         strm << "       keys: \n";
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
-                if (kvp != nullptr)
-                {
+            if (kvp != nullptr)
+            {
                 strm << "       >> " << kvp->key.c_str() << "\n";
-                }
-                });
+            }
+        });
 
         if (HasAncestor())
         {
-            strm << "          ancestor: " << GetAncestor() << "\n";
+            strm << "          ancestor: " << GetAncestor().value() << "\n";
         }
     }
 

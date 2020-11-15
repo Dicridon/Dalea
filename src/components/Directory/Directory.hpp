@@ -43,10 +43,12 @@ namespace Dalea
         const SegmentPtr &GetSegment(uint64_t pos) const noexcept;
         const SegmentPtr &GetSegment(const HashValue &hv, uint64_t depth) const noexcept;
 
-        void LockSegment(uint64_t pos) noexcept;
-        void LockSegmentShared(uint64_t pos) noexcept;
-        void TryLockSegment(uint64_t pos) noexcept;
-        void TryLockSegmentShared(uint64_t pos) noexcept;
+        const SegmentPtr LockSegment(uint64_t pos) noexcept;
+        const SegmentPtr LockSegment(const HashValue &hv, uint64_t depth) noexcept;
+        const SegmentPtr LockSegmentShared(uint64_t pos) noexcept;
+        const SegmentPtr LockSegmentShared(const HashValue &hv, uint64_t depth) noexcept;
+        bool TryLockSegment(uint64_t pos) noexcept;
+        bool TryLockSegmentShared(uint64_t pos) noexcept;
         void UnlockSegment(uint64_t pos) noexcept;
         void UnlockSegmentShared(uint64_t pos) noexcept;
         
