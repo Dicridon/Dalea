@@ -126,6 +126,7 @@ namespace Dalea
 #ifdef LOGGING
         std::stringstream log_buf;
         log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+        Log(log_buf);
 #endif
         auto ans = bkt->GetAncestor();
         if (ans.has_value())
@@ -134,6 +135,7 @@ namespace Dalea
             bkt = &seg->buckets[hv.BucketBits()];
 #ifdef LOGGING
             log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
+            Log(log_buf);
 #endif
         }
 #ifdef LOGGING
