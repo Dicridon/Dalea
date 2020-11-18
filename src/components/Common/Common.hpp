@@ -42,7 +42,7 @@ namespace Dalea
 #else
     constexpr int BUCKET_SIZE = 2;
     constexpr int META_BITS = 16;
-    constexpr int BUCKET_BITS = 3;
+    constexpr int BUCKET_BITS = 1;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
     constexpr int SUBDIR_SIZE = (1 << 16);
     constexpr int METADIR_SIZE = (1 << 4);

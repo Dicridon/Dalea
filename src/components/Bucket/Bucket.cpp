@@ -96,7 +96,8 @@ namespace Dalea
         if (HasAncestor())
         {
             std::stringstream buf;
-            buf << "Ancestor detected " << GetAncestor().value() << " in" << this << "\n";
+            buf << "Ancestor detected " << GetAncestor().value() << " in (" << segno << ", " 
+                << hash_value.BucketBits() << ")\n";
             logger.Write(buf.str());
             return FunctionStatus::FlattenRequired;
         }
@@ -117,32 +118,16 @@ namespace Dalea
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
             auto iter = std::to_string(search);
-#ifdef LOGGING
-            auto msg = ">>>> in looping " + iter + "\n";
-            logger.Write(msg);
-#endif
             // the later condition is used for lazy deletion, also postpone splitting as much as possible
             auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
             if (fingerprints[search].IsInvalid() || f != encoding)
             {
-#ifdef LOGGING
-                std::string msg{">>>> empty slot found\n"};
-                logger.Write(msg);
-#endif
                 slot = search;
             }
             if (fingerprints[search] == hash_value)
             {
-#ifdef LOGGING
-                std::string msg{">>>> duplicated fingerprint detected\n"};
-                logger.Write(msg);
-#endif
                 if (pairs[search]->key == key)
                 {
-#ifdef LOGGING
-                    std::string msg{">>>> updating\n"};
-                    logger.Write(msg);
-#endif
                     TX::manual tx(pop);
                     pairs[search]->value = value;
                     TX::commit();

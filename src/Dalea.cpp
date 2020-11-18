@@ -31,9 +31,8 @@ namespace Dalea
 #ifdef LOGGING
         std::stringstream log_buf;
         log_buf << "first putting " << key << "(" << std::hex << hv.GetRaw() << std::dec << ")"
-                << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) << "\n";
-        Log(log_buf);
-        log_buf << "bucket is " << bkt << "\n";
+                << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " 
+                << uint64_t(depth) << ", bucket depth: " << uint64_t(bkt->metainfo.local_depth) << "\n";
         Log(log_buf);
 #endif
         auto ans = bkt->GetAncestor();
@@ -44,8 +43,6 @@ namespace Dalea
 #ifdef LOGGING
             log_buf << ">#< changing putting " << key << "(" << std::hex << hv.GetRaw() << std::dec << ")"
                     << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " << uint64_t(depth) << "\n";
-            Log(log_buf);
-            log_buf << ">#< bucket is " << bkt << "\n";
             Log(log_buf);
 #endif
         }
@@ -339,14 +336,40 @@ namespace Dalea
                 SegmentPtr pre_seg = nullptr;
                 TX::run(pop, [&]() {
                     pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                    dir.AddSegment(pop, pre_seg, walk);
                 });
+#ifdef LOGGING
+                std::stringstream log;
+                log << ">>>> creating new segment " << walk << " which connects to " 
+                    << walk_ptr->segment_no.get_ro() << "\n";
+                Log(log);
+#endif
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
-                    auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor().value() : walk_ptr->segment_no.get_ro();
+                    auto ans = walk_ptr->buckets[i].HasAncestor() ? 
+                               walk_ptr->buckets[i].GetAncestor().value() : 
+                               walk_ptr->segment_no.get_ro();
                     pre_seg->buckets[i].SetAncestor(ans);
+#ifdef LOGGING
+                    if (walk_ptr->buckets[i].HasAncestor())
+                    {
+                        log << "(" << walk_ptr->segment_no.get_ro() << ", "<< i << ")has ancestor " 
+                            << ans << "\n";
+                        Log(log);
+                    }
+                    else
+                    {
+                        log << "(" << walk_ptr->segment_no.get_ro() << ", "<< i 
+                            << ")has no ancestor, connecting to " << walk_ptr->segment_no.get_ro() 
+                            << "\n";
+                        Log(log);
+                    }
+#endif
                 }
-                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor().value() : buddy_segno);
+                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? 
+                                                      buddy_bkt->GetAncestor().value() : buddy_segno);
+                TX::run(pop, [&]() {
+                    dir.AddSegment(pop, pre_seg, walk);
+                });
                 dir.UnlockSegment(walk);
                 continue;
             }
@@ -475,10 +498,14 @@ namespace Dalea
 
     SegmentPtr HashTable::make_buddy_segment(PoolBase &pop, const SegmentPtr &root, uint64_t segno, uint64_t buddy_segno, const Bucket &bkt) noexcept
     {
+#ifdef LOGGING
+        std::stringstream log;
+        log << ">>>> creating new segment " << buddy_segno << "\n";
+        Log(log);
+#endif
         SegmentPtr buddy = nullptr;
         TX::run(pop, [&]() {
             buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-            dir.AddSegment(pop, buddy, buddy_segno);
         });
 
         for (int i = 0; i < SEG_SIZE; i++)
@@ -488,12 +515,25 @@ namespace Dalea
             {
                 // avoid chaining
                 buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor().value());
+#ifdef LOGGING
+                log << "(" << root->segment_no.get_ro() << ", " << i << ") has ancestor "
+                    << root->buckets[i].GetAncestor().value() << "\n";
+                Log(log);
+#endif
             }
             else
             {
                 buddy->buckets[i].SetAncestor(segno);
+#ifdef LOGGING
+                log << "(" << root->segment_no.get_ro() << ", " << i << ") has no ancestor "
+                    << "connecting to " << segno << "\n";
+                Log(log);
+#endif
             }
         }
+        TX::run(pop, [&]() {
+            dir.AddSegment(pop, buddy, buddy_segno);
+        });
         return buddy;
     }
 } // namespace Dalea
