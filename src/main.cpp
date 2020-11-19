@@ -1,22 +1,44 @@
+#include <algorithm>
+#include <chrono>
+#include <fstream>
+#include <functional>
 #include <iostream>
+#include <numeric>
+#include <queue>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
-#include <queue>
-#include <algorithm>
-#include <numeric>
-#include <chrono>
-#include <sstream>
-#include <fstream>
-#include <string>
 
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
 
 using namespace Dalea;
 
+const std::string PUT = "INSERT";
+const std::string GET = "READ";
+const std::string UPDATE = "UPDATE";
+const std::string DELETE = "DELETE";
+
 struct DaleaRoot
 {
     pobj::persistent_ptr<HashTable> map;
+};
+
+enum class Ops
+{
+    Insert,
+    Read,
+    Update,
+    Delete,
+};
+
+struct WorkloadItem
+{
+    Ops type;
+    std::string key;
+
+    WorkloadItem(const Ops &t, const std::string &k) : type(t), key(k){};
 };
 
 static std::string new_string(uint64_t i)
@@ -41,20 +63,67 @@ auto prepare_root(pobj::pool<DaleaRoot> &pop)
     return r;
 }
 
-void put(PoolBase &pop, std::vector<std::string> &workload, pobj::persistent_ptr<HashTable> &map)
+void bench_thread(std::function<void(const WorkloadItem &)> func,
+                  std::vector<WorkloadItem> &workload,
+                  std::vector<double> &throughput,
+                  std::vector<double> &latency,
+                  std::vector<double> &p90,
+                  std::vector<double> &p99,
+                  std::vector<double> &p999)
 {
-    // for (const auto &i : workload)
-    // {
-    //     map->Put(pop, i, i);
-    // }
-    for (auto i = 0; i < workload.size(); i++)
-     {
-        if (i % 100000 == 0)
+    auto sampling_batch = 10000;
+    auto counter = 0;
+    std::priority_queue<double> tail;
+    std::vector<double> latencies;
+
+    std::chrono::time_point<std::chrono::steady_clock> lat_start;
+    std::chrono::time_point<std::chrono::steady_clock> lat_end;
+    double time_elapsed = 0;
+    for (const auto &i : workload)
+    {
+        lat_start = std::chrono::steady_clock::now();
+
+        func(i);
+
+        lat_end = std::chrono::steady_clock::now();
+        time_elapsed += (lat_end - lat_start).count();
+        tail.push((lat_end - lat_start).count());
+        latencies.push_back((lat_end - lat_start).count()); // in nanoseconds 
+        if (++counter == sampling_batch)
         {
-            // std::cout << "Progress: " << double(i) / workload.size() * 100 << "%\n";
+            throughput.push_back(sampling_batch / time_elapsed / 1000000000.0);
+            latency.push_back(std::accumulate(latencies.cbegin(), latencies.cend(), 0.0) / sampling_batch);
+
+            double tmp_p90 = 0, tmp_p99 = 0, tmp_p999 = 0;
+            for (int i = 0; i < sampling_batch * 0.001; i++)
+            {
+                tmp_p90 += tail.top();
+                tmp_p99 += tail.top();
+                tmp_p999 += tail.top();
+                tail.pop();
+            }
+
+            for (int i = 0; i < sampling_batch * 0.009; i++)
+            {
+                tmp_p90 += tail.top();
+                tmp_p99 += tail.top();
+                tail.pop();
+            }
+
+            for (int i = 0; i < sampling_batch * 0.09; i++)
+            {
+                tmp_p90 += tail.top();
+                tail.pop();
+            }
+            p90.push_back(tmp_p90 / (sampling_batch * 0.1));
+            p99.push_back(tmp_p99 / (sampling_batch * 0.01));
+            p999.push_back(tmp_p999 / (sampling_batch * 0.001));
+
+            time_elapsed = 0;
+            latencies.clear();
+            tail = std::priority_queue<double>();
+            counter = 0;
         }
-        // std::cout << workload[i] << "\n";
-        map->Put(pop, workload[i], workload[i]);
     }
 }
 
@@ -84,73 +153,187 @@ int main(int argc, char *argv[])
     auto root = prepare_root(pop);
 
     {
-    std::thread workers[threads];
-    std::vector<std::string> workload[threads];
+        std::thread workers[threads];
+        std::vector<WorkloadItem> workloads[threads];
 
-    std::ifstream warmup;
-    std::ifstream run;
-    // warmup.open(warm_file);
-    run.open(run_file);
-    std::string buffer;
-    auto count = 0;
-    auto load = 0;
-    while (getline(run, buffer))
-    {
-        ++load;
-        workload[(count++) % threads].push_back(std::string(buffer.c_str() + 7));
-    }
+        std::vector<double> throughputs[threads];
+        std::vector<double> latencies[threads];
+        std::vector<double> p90s[threads];
+        std::vector<double> p99s[threads];
+        std::vector<double> p999s[threads];
 
+        std::ifstream warmup;
+        std::ifstream run;
+        // warmup.open(warm_file);
+        run.open(run_file);
+        std::string buffer;
+        auto count = 0;
+        auto load = 0;
+        while (getline(run, buffer))
+        {
+            ++load;
+            std::string key;
+            Ops type;
+            if (buffer.rfind(PUT, 0) == 0)
+            {
+                key = buffer.c_str() + PUT.length();
+                type = Ops::Insert;
+            }
+            else if (buffer.rfind(GET, 0) == 0)
+            {
+                key = buffer.c_str() + GET.length();
+                type = Ops::Read;
+            }
+            else if (buffer.rfind(UPDATE, 0) == 0)
+            {
+                key = buffer.c_str() + UPDATE.length();
+                type = Ops::Update;
+            }
+            else if (buffer.rfind(DELETE, 0) == 0)
+            {
+                key = buffer.c_str() + DELETE.length();
+                type = Ops::Delete;
+            }
+            else
+            {
+                std::cout << "unknown operation: " << buffer << "\n";
+                return -1;
+            }
+            workloads[(count++) % threads].push_back(WorkloadItem(type, key));
+        }
 
-    auto start = std::chrono::steady_clock::now();
-    for (auto i = 0; i < threads; i++)
-    {
-        workers[i] = std::thread(put, std::ref(pop), std::ref(workload[i]), std::ref(root->map));
-    }
+        auto consume = [&](const WorkloadItem &item) {
+            switch (item.type)
+            {
+            case Ops::Insert:
+                root->map->Put(pop, item.key, item.key);
+                break;
+            case Ops::Read:
+                root->map->Get(item.key);
+                break;
+            case Ops::Update:
+                root->map->Put(pop, item.key, item.key);
+                break;
+            case Ops::Delete:
+                root->map->Remove(pop, item.key);
+                break;
+            default:
+                break;
+            }
+        };
 
-    for (auto &t : workers)
-    {
-        t.join();
-    }
-    auto end = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
-    std::cout << "time elapsed is " << duration << "\n";
-    std::cout << "throughput is " << double(load) / duration << "\n";
+        auto start = std::chrono::steady_clock::now();
+        for (auto i = 0; i < threads; i++)
+        {
+            workers[i] = std::thread(bench_thread,
+                                     consume,
+                                     std::ref(workloads[i]),
+                                     std::ref(throughputs[i]),
+                                     std::ref(latencies[i]),
+                                     std::ref(p90s[i]),
+                                     std::ref(p99s[i]),
+                                     std::ref(p999s[i]));
+        }
+
+        for (auto &t : workers)
+        {
+            t.join();
+        }
+        auto end = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+        std::cout << "time elapsed is " << duration << "\n";
+        std::cout << "throughput is " << double(load) / duration << "\n";
+
+        std::cout << "\nreporting throughput by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto t : throughputs[i])
+            {
+                std::cout << t << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting latency by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto l : latencies[i])
+            {
+                std::cout << l << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting p90 by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : p90s[i])
+            {
+                std::cout << p << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting p99 by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : p99s[i])
+            {
+                std::cout << p << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting p999 by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : p999s[i])
+            {
+                std::cout << p << " ";
+            }
+            std::cout << "\n";
+        }
 
 #ifdef VALIATION
-    bool pass = true;
-    long i = 0;
-    for (; i < batch; i++)
-    {
-        auto key = new_string(i);
-        auto value = new_string(i);
-        auto ptr = root->map->Get(key);
-        std::stringstream buf;
-        if (ptr == nullptr)
+        bool pass = true;
+        long i = 0;
+        for (; i < batch; i++)
         {
-            buf << "missing value for key " << key << "\n";
-            std::cout << buf.str();
-            root->map->Log(buf);
-            pass = false;
+            auto key = new_string(i);
+            auto value = new_string(i);
+            auto ptr = root->map->Get(key);
+            std::stringstream buf;
+            if (ptr == nullptr)
+            {
+                buf << "missing value for key " << key << "\n";
+                std::cout << buf.str();
+                root->map->Log(buf);
+                pass = false;
+            }
+            else if (ptr->value != value)
+            {
+                buf << "wrong value for key " << key << "\n";
+                buf << "expecting " << value << "\n";
+                buf << "got " << ptr->value.c_str() << "\n";
+                std::cout << buf.str();
+                root->map->Log(buf);
+                pass = false;
+            }
         }
-        else if (ptr->value != value)
+        if (pass)
         {
-            buf << "wrong value for key " << key << "\n";
-            buf << "expecting " << value << "\n";
-            buf << "got " << ptr->value.c_str() << "\n";
-            std::cout << buf.str();
-            root->map->Log(buf);
-            pass = false;
+            std::cout << "check passed\n";
         }
-    }
-    if (pass)
-    {
-        std::cout << "check passed\n";
-    }
-    else
-    {
-        std::cout << "check failed\n";
-        root->map->DebugToLog();
-    }
+        else
+        {
+            std::cout << "check failed\n";
+            root->map->DebugToLog();
+        }
 #endif
     }
 }
