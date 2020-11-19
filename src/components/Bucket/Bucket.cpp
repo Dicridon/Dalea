@@ -40,10 +40,10 @@ namespace Dalea
 
     FunctionStatus Bucket::Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
     {
-        if (HasAncestor())
-        {
-            return FunctionStatus::FlattenRequired;
-        }
+        // if (HasAncestor())
+        // {
+        //     return FunctionStatus::FlattenRequired;
+        // }
 
         int slot = -1;
         auto mask = ((1UL << GetDepth()) - 1);
@@ -70,9 +70,9 @@ namespace Dalea
             {
                 if (pairs[search]->key == key)
                 {
-                    TX::manual tx(pop);
+                    // TX::manual tx(pop);
                     pairs[search]->value = value;
-                    TX::commit();
+                    // TX::commit();
                     return FunctionStatus::Ok;
                 }
             }
@@ -81,13 +81,16 @@ namespace Dalea
         {
             return FunctionStatus::SplitRequired;
         }
+        KVPairPtr pair = nullptr;
         TX::run(pop, [&]() {
-            auto pair = pmem::obj::make_persistent<KVPair>(
+            pair = pmem::obj::make_persistent<KVPair>(
                 key,
                 value);
-            pairs[slot] = pair;
-            fingerprints[slot] = hash_value;
         });
+        pairs[slot] = pair;
+        fingerprints[slot] = hash_value;
+        pmemobj_persist(pop.handle(), pairs + slot, sizeof(KVPair));
+        pmemobj_persist(pop.handle(), fingerprints + slot, sizeof(uint64_t));
         return FunctionStatus::Ok;
     }
 

@@ -1,5 +1,6 @@
 #include "Dalea.hpp"
 #include <iomanip>
+#include <thread>
 
 #define LINE                                  \
     {                                         \
@@ -17,6 +18,7 @@ namespace Dalea
         // directory doubling concurrency control
         if (to_double)
         {
+            std::this_thread::yield();
             goto RETRY;
         }
 
@@ -57,6 +59,7 @@ namespace Dalea
         {
             // reader_lock.unlock_shared();
             --readers;
+            std::this_thread::yield();
             goto RETRY;
         }
 #ifdef LOGGING
@@ -78,6 +81,7 @@ namespace Dalea
             bkt->Unlock();
             //reader_lock.unlock_shared();
             --readers;
+            std::this_thread::yield();
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
@@ -94,6 +98,7 @@ namespace Dalea
             bkt->Unlock();
             // reader_lock.unlock_shared();
             --readers;
+            std::this_thread::yield();
             goto RETRY;
         case FunctionStatus::FlattenRequired:
         {

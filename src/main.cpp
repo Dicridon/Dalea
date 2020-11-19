@@ -4,6 +4,10 @@
 #include <queue>
 #include <algorithm>
 #include <numeric>
+#include <chrono>
+#include <sstream>
+#include <fstream>
+#include <string>
 
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
@@ -47,7 +51,7 @@ void put(PoolBase &pop, std::vector<std::string> &workload, pobj::persistent_ptr
      {
         if (i % 100000 == 0)
         {
-            std::cout << "Progress: " << double(i) / workload.size() * 100 << "%\n";
+            // std::cout << "Progress: " << double(i) / workload.size() * 100 << "%\n";
         }
         // std::cout << workload[i] << "\n";
         map->Put(pop, workload[i], workload[i]);
@@ -79,14 +83,25 @@ int main(int argc, char *argv[])
     auto pop = prepare_pool(pool_file, 10240);
     auto root = prepare_root(pop);
 
+    {
     std::thread workers[threads];
     std::vector<std::string> workload[threads];
 
-    for (auto i = 0; i < batch; i++)
+    std::ifstream warmup;
+    std::ifstream run;
+    // warmup.open(warm_file);
+    run.open(run_file);
+    std::string buffer;
+    auto count = 0;
+    auto load = 0;
+    while (getline(run, buffer))
     {
-        workload[i % threads].push_back(new_string(i));
+        ++load;
+        workload[(count++) % threads].push_back(std::string(buffer.c_str() + 7));
     }
 
+
+    auto start = std::chrono::steady_clock::now();
     for (auto i = 0; i < threads; i++)
     {
         workers[i] = std::thread(put, std::ref(pop), std::ref(workload[i]), std::ref(root->map));
@@ -96,7 +111,12 @@ int main(int argc, char *argv[])
     {
         t.join();
     }
+    auto end = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+    std::cout << "time elapsed is " << duration << "\n";
+    std::cout << "throughput is " << double(load) / duration << "\n";
 
+#ifdef VALIATION
     bool pass = true;
     long i = 0;
     for (; i < batch; i++)
@@ -130,5 +150,7 @@ int main(int argc, char *argv[])
     {
         std::cout << "check failed\n";
         root->map->DebugToLog();
+    }
+#endif
     }
 }
