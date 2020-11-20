@@ -63,7 +63,8 @@ auto prepare_root(pobj::pool<DaleaRoot> &pop)
     return r;
 }
 
-void bench_thread(std::function<void(const WorkloadItem &)> func,
+void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
+                  std::vector<Stats> &stats,
                   std::vector<WorkloadItem> &workload,
                   std::vector<double> &throughput,
                   std::vector<double> &latency,
@@ -79,11 +80,12 @@ void bench_thread(std::function<void(const WorkloadItem &)> func,
     std::chrono::time_point<std::chrono::steady_clock> lat_start;
     std::chrono::time_point<std::chrono::steady_clock> lat_end;
     double time_elapsed = 0;
+    Stats st;
     for (const auto &i : workload)
     {
         lat_start = std::chrono::steady_clock::now();
 
-        func(i);
+        func(i, st);
 
         lat_end = std::chrono::steady_clock::now();
         time_elapsed += (lat_end - lat_start).count();
@@ -118,11 +120,13 @@ void bench_thread(std::function<void(const WorkloadItem &)> func,
             p90.push_back(tmp_p90 / (sampling_batch * 0.1));
             p99.push_back(tmp_p99 / (sampling_batch * 0.01));
             p999.push_back(tmp_p999 / (sampling_batch * 0.001));
+            stats.push_back(st);
 
             time_elapsed = 0;
             latencies.clear();
             tail = std::priority_queue<double>();
             counter = 0;
+            st.Clear();
         }
     }
 }
@@ -155,7 +159,7 @@ int main(int argc, char *argv[])
     {
         std::thread workers[threads];
         std::vector<WorkloadItem> workloads[threads];
-
+        std::vector<Stats> statses[threads];
         std::vector<double> throughputs[threads];
         std::vector<double> latencies[threads];
         std::vector<double> p90s[threads];
@@ -202,17 +206,17 @@ int main(int argc, char *argv[])
             workloads[(count++) % threads].push_back(WorkloadItem(type, key));
         }
 
-        auto consume = [&](const WorkloadItem &item) {
+        auto consume = [&](const WorkloadItem &item, Stats &stats) {
             switch (item.type)
             {
             case Ops::Insert:
-                root->map->Put(pop, item.key, item.key);
+                root->map->Put(pop, stats, item.key, item.key);
                 break;
             case Ops::Read:
                 root->map->Get(item.key);
                 break;
             case Ops::Update:
-                root->map->Put(pop, item.key, item.key);
+                root->map->Put(pop, stats, item.key, item.key);
                 break;
             case Ops::Delete:
                 root->map->Remove(pop, item.key);
@@ -227,6 +231,7 @@ int main(int argc, char *argv[])
         {
             workers[i] = std::thread(bench_thread,
                                      consume,
+                                     std::ref(statses[i]),
                                      std::ref(workloads[i]),
                                      std::ref(throughputs[i]),
                                      std::ref(latencies[i]),
@@ -299,6 +304,38 @@ int main(int argc, char *argv[])
             std::cout << "\n";
         }
 
+        std::cout << "\nreporting simple split by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : statses[i])
+            {
+                std::cout << p.simple_splits << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting traditional split by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : statses[i])
+            {
+                std::cout << p.traditional_splits << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\nreporting complex split by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : statses[i])
+            {
+                std::cout << p.complex_splits << " ";
+            }
+            std::cout << "\n";
+        }
 #ifdef VALIATION
         bool pass = true;
         long i = 0;

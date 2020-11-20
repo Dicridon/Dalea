@@ -1,7 +1,9 @@
-./src/Dalea.hpp: ./src/components/Directory/Directory.hpp ./src/components/Logger/Logger.hpp
+./src/Dalea.hpp: ./src/components/Directory/Directory.hpp ./src/components/Logger/Logger.hpp ./src/components/Stats/Stats.hpp
 ./src/CmdParser.hpp: 
 ./src/Dalea.cpp: ./src/Dalea.hpp
 ./src/main.cpp: ./src/CmdParser.hpp ./src/Dalea.hpp
+./src/components/Stats/Stats.hpp: ./src/components/Common/Common.hpp
+./src/components/Stats/Stats.cpp: ./src/components/Stats/Stats.hpp
 ./src/components/Segment/Segment.hpp: ./src/components/Bucket/Bucket.hpp
 ./src/components/Segment/Segment.cpp: ./src/components/Segment/Segment.hpp
 ./src/components/Logger/Logger.cpp: ./src/components/Logger/Logger.hpp
@@ -10,7 +12,7 @@
 ./src/components/Directory/Directory.hpp: ./src/components/Segment/Segment.hpp
 ./src/components/KVPair/KVPair.cpp: ./src/components/KVPair/KVPair.hpp
 ./src/components/KVPair/KVPair.hpp: ./src/components/Common/Common.hpp
-./src/components/Bucket/Bucket.hpp: ./src/components/KVPair/KVPair.hpp
+./src/components/Bucket/Bucket.hpp: ./src/components/KVPair/KVPair.hpp ./src/components/Logger/Logger.hpp
 ./src/components/Bucket/Bucket.cpp: ./src/components/Bucket/Bucket.hpp
 ./src/components/Common/Common.hpp: 
 ./src/components/Common/Common.cpp: ./src/components/Common/Common.hpp

@@ -90,7 +90,7 @@ namespace Dalea
         }, std::ref(pop), std::ref(segment_pool)).detach();
     }
 
-    FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
+    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
 
@@ -168,7 +168,7 @@ namespace Dalea
         case FunctionStatus::SplitRequired:
         {
             // lock is acquired inside split depending on global depth
-            split(pop, *bkt, hv, seg, seg->segment_no);
+            split(pop, stats, *bkt, hv, seg, seg->segment_no);
 
 #ifdef LOGGING
             std::stringstream buf;
@@ -328,7 +328,7 @@ namespace Dalea
     /*
      * bucket bkt is already locked if this method is called
      */
-    void HashTable::split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
 #ifdef LOGGING
         Log(">>>> entering split\n");
@@ -337,7 +337,7 @@ namespace Dalea
         if (local_depth < depth)
         {
             // this function would decides if a simple split or a traditional split is required
-            traditional_split(pop, bkt, hv, segno, false);
+            traditional_split(pop, stats, bkt, hv, segno, false);
         }
         else
         {
@@ -362,7 +362,7 @@ namespace Dalea
 #endif
                 return;
             }
-            complex_split(pop, bkt, hv, seg, segno);
+            complex_split(pop, stats, bkt, hv, seg, segno);
             doubling_lock.unlock();
             to_double = false;
         }
@@ -392,8 +392,9 @@ namespace Dalea
      *  concurrent sweep seems to be viable, for each thread touches different kvs, ther is no conflicts
      *  but should ensure the correctness of global depth after a crash
      */
-    void HashTable::simple_split(PoolBase &pop, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
+    void HashTable::simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
     {
+        stats.simple_splits++;
 #ifdef LOGGING
         Log(">>>> entering simple_split\n");
 #endif
@@ -489,8 +490,9 @@ namespace Dalea
      * it decides whether to allocate or not, if allocating, then a traditional split is done
      * if not, a simple split is enough.
      */
-    void HashTable::traditional_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
+    void HashTable::traditional_split(PoolBase &pop, Stats &stats,  Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
+        stats.traditional_splits++;
 #ifdef LOGGING
         Log("entering traditional_split\n");
 #endif
@@ -518,7 +520,7 @@ namespace Dalea
         }
         dir.UnlockSegment(buddy_segno);
 
-        simple_split(pop, root_segno, buddy_segno, bkt, bktbits);
+        simple_split(pop, stats, root_segno, buddy_segno, bkt, bktbits);
 #ifdef LOGGING
         Log("leaving traditional_split\n");
 #endif
@@ -535,8 +537,9 @@ namespace Dalea
      * 
      * only one thread woulding calling this method
      */
-    void HashTable::complex_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::complex_split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
+        stats.complex_splits++;
 #ifdef LOGGING
         Log("entering complex_split\n");
 #endif
@@ -583,7 +586,7 @@ namespace Dalea
 #ifdef TIMING
         d_start = std::chrono::steady_clock::now();
 #endif
-        simple_split(pop, root_segno, buddy_segno, bkt, hv.BucketBits());
+        simple_split(pop, stats, root_segno, buddy_segno, bkt, hv.BucketBits());
 #ifdef TIMING
         d_end = std::chrono::steady_clock::now();
         std::cout << "SimpleSplit: " << (d_end - d_start).count() << "\n";

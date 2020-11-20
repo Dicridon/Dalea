@@ -2,6 +2,7 @@
 #define __DALEA__
 #include "Directory/Directory.hpp"
 #include "Logger/Logger.hpp"
+#include "Stats/Stats.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -34,7 +35,7 @@ namespace Dalea
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
 
-        FunctionStatus Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept;
+        FunctionStatus Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept;
         KVPairPtr Get(const std::string &key) const noexcept;
         FunctionStatus Remove(PoolBase &pop, const std::string &key) noexcept;
         void Destory() noexcept;
@@ -55,10 +56,10 @@ namespace Dalea
         mutable Logger logger;
         mutable SegmentPtrQueue segment_pool;
 
-        void split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
-        void simple_split(PoolBase &pop, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept;
-        void traditional_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept;
-        void complex_split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &ptr, uint64_t segno) noexcept;
+        void split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
+        void simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept;
+        void traditional_split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept;
+        void complex_split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &ptr, uint64_t segno) noexcept;
 
         void flatten_bucket(PoolBase &pop, Bucket &bkt, const HashValue &hv, uint64_t segno) noexcept;
         SegmentPtr make_buddy_segment(PoolBase &pop, const SegmentPtr &root, uint64_t segno, uint64_t buddy_segno, const Bucket &bkt) noexcept;
