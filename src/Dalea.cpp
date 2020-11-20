@@ -8,7 +8,7 @@
     {                                         \
         Log(std::to_string(__LINE__) + "\n"); \
     }
-// #ifdef TIMING
+#define TIMING
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -64,10 +64,10 @@ namespace Dalea
           to_double(false),
           readers(0),
           logger(std::string("./dalea.log")),
-          segment_pool(pop, 512)
+          segment_pool(pop, 4096)
     {
         TX::run(pop, [&]() {
-            for (int i = 0; i < 512; i++)
+            for (int i = 0; i < 4096; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr);
@@ -75,17 +75,14 @@ namespace Dalea
         });
         std::thread([&](PoolBase &pop, SegmentPtrQueue &queue) {
             while(1) {
-                if (queue.size < queue.capacity - 50)
+                while (queue.HasSpace())
                 {
-                    for (int i = 0; i < 50; i++)
-                    {
-                        TX::run(pop, [&]() {
-                            auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                            queue.Push(ptr);
-                        });
-                    }
+                    TX::run(pop, [&]() {
+                        auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                        queue.Push(ptr);
+                    });
                 }
-                std::this_thread::sleep_for(2s);
+                std::this_thread::sleep_for(1ms);
             }
         }, std::ref(pop), std::ref(segment_pool)).detach();
     }
@@ -628,7 +625,9 @@ namespace Dalea
         //     buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
         // });
         while ((buddy = segment_pool.Pop()) == nullptr)
-            ;
+        {
+            std::cout << "pending for segment\n";
+        }
         buddy->segment_no = buddy_segno;
 #ifdef TIMING
         auto end = std::chrono::steady_clock::now();
