@@ -3,14 +3,33 @@
 #include "Directory/Directory.hpp"
 #include "Logger/Logger.hpp"
 
-#include <sstream>
 #include <atomic>
+#include <chrono>
+#include <sstream>
+#include <thread>
 namespace Dalea
 {
+    using namespace std::chrono_literals;
+    struct SegmentPtrQueue
+    {
+        SegmentPtrQueue(PoolBase &pop, int init_cap = 512);
+        bool Push(const SegmentPtr &ptr) noexcept;
+        SegmentPtr Top() noexcept;
+        SegmentPtr Pop() noexcept;
+        bool HasSpace() const noexcept;
+
+        std::mutex lock;
+        pobj::persistent_ptr<SegmentPtr[]> buffer;
+        uint64_t head;
+        uint64_t tail;
+        int capacity;
+        int size;
+    };
+
     class HashTable
     {
     public:
-        HashTable(PoolBase &pop) : dir(pop), depth(1), to_double(false), readers(0), logger(std::string("./dalea.log")) {};
+        HashTable(PoolBase &pop);
         HashTable() = delete;
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
@@ -31,9 +50,10 @@ namespace Dalea
         Directory dir;
 
         std::atomic_bool to_double;
-        std::atomic_int readers;;
+        std::atomic_int readers;
         std::shared_mutex doubling_lock;
         mutable Logger logger;
+        mutable SegmentPtrQueue segment_pool;
 
         void split(PoolBase &pop, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
         void simple_split(PoolBase &pop, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept;

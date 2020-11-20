@@ -1,8 +1,8 @@
 #include "Dalea.hpp"
 
+#include <chrono>
 #include <iomanip>
 #include <thread>
-#include <chrono>
 
 #define LINE                                  \
     {                                         \
@@ -10,6 +10,84 @@
     }
 namespace Dalea
 {
+    SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
+    {
+        TX::run(pop, [&]() {
+            buffer = pobj::make_persistent<SegmentPtr[]>(init_cap + 1);
+        });
+
+        head = tail = 0;
+    }
+
+    bool SegmentPtrQueue::Push(const SegmentPtr &ptr) noexcept
+    {
+        std::unique_lock _(lock);
+        if ((tail + 1) % capacity == head)
+        {
+            return false;
+        }
+        buffer[tail++] = ptr;
+        size++;
+        return true;
+    }
+
+    SegmentPtr SegmentPtrQueue::Top() noexcept
+    {
+        std::unique_lock _(lock);
+        if (head == tail)
+        {
+            return nullptr;
+        }
+        return buffer[head];
+    }
+
+    SegmentPtr SegmentPtrQueue::Pop() noexcept
+    {
+        std::unique_lock _(lock);
+        if (head != tail)
+        {
+            return nullptr;
+        }
+        size--;
+        return buffer[head--];
+    }
+
+    bool SegmentPtrQueue::HasSpace() const noexcept
+    {
+        return size != capacity;
+    }
+
+    HashTable::HashTable(PoolBase &pop)
+        : dir(pop),
+          depth(1),
+          to_double(false),
+          readers(0),
+          logger(std::string("./dalea.log")),
+          segment_pool(pop, 512)
+    {
+        TX::run(pop, [&]() {
+            for (int i = 0; i < 512; i++)
+            {
+                auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                segment_pool.Push(ptr);
+            }
+        });
+        auto t = std::thread([&](PoolBase &pop, SegmentPtrQueue &queue) {
+            if (queue.size <= queue.capacity - 50)
+            {
+                for (int i = 0; i < 50; i++)
+                {
+                    TX::run(pop, [&]() {
+                        auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                        queue.Push(ptr);
+                    });
+                }
+            }
+            std::this_thread::sleep_for(2s);
+        },
+                             std::ref(pop), std::ref(segment_pool));
+    }
+
     FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
@@ -35,7 +113,7 @@ namespace Dalea
 #ifdef LOGGING
         std::stringstream log_buf;
         log_buf << "first putting " << key << "(" << std::hex << hv.GetRaw() << std::dec << ")"
-                << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: " 
+                << " to (" << seg->segment_no << ", " << hv.BucketBits() << "), global depth: "
                 << uint64_t(depth) << ", bucket depth: " << uint64_t(bkt->metainfo.local_depth) << "\n";
         Log(log_buf);
 #endif
@@ -272,7 +350,8 @@ namespace Dalea
             }
 
             // complex split thread is the only reader;
-            while(readers != 1);
+            while (readers != 1)
+                ;
 
             if (!doubling_lock.try_lock())
             {
@@ -286,7 +365,7 @@ namespace Dalea
             to_double = false;
         }
 #ifdef LOGGING
-            Log(">>>> leaving split\n");
+        Log(">>>> leaving split\n");
 #endif
     }
 
@@ -346,34 +425,31 @@ namespace Dalea
                 });
 #ifdef LOGGING
                 std::stringstream log;
-                log << ">>>> creating new segment " << walk << " which connects to " 
+                log << ">>>> creating new segment " << walk << " which connects to "
                     << walk_ptr->segment_no.get_ro() << "\n";
                 Log(log);
 #endif
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
-                    auto ans = walk_ptr->buckets[i].HasAncestor() ? 
-                               walk_ptr->buckets[i].GetAncestor().value() : 
-                               walk_ptr->segment_no.get_ro();
+                    auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor().value() : walk_ptr->segment_no.get_ro();
                     pre_seg->buckets[i].SetAncestor(ans);
 #ifdef LOGGING
                     if (walk_ptr->buckets[i].HasAncestor())
                     {
-                        log << "(" << walk_ptr->segment_no.get_ro() << ", "<< i << ")has ancestor " 
+                        log << "(" << walk_ptr->segment_no.get_ro() << ", " << i << ")has ancestor "
                             << ans << "\n";
                         Log(log);
                     }
                     else
                     {
-                        log << "(" << walk_ptr->segment_no.get_ro() << ", "<< i 
-                            << ")has no ancestor, connecting to " << walk_ptr->segment_no.get_ro() 
+                        log << "(" << walk_ptr->segment_no.get_ro() << ", " << i
+                            << ")has no ancestor, connecting to " << walk_ptr->segment_no.get_ro()
                             << "\n";
                         Log(log);
                     }
 #endif
                 }
-                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? 
-                                                      buddy_bkt->GetAncestor().value() : buddy_segno);
+                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor().value() : buddy_segno);
                 TX::run(pop, [&]() {
                     dir.AddSegment(pop, pre_seg, walk);
                 });
@@ -479,7 +555,7 @@ namespace Dalea
         SegmentPtr buddy = nullptr;
         auto d_start = std::chrono::steady_clock::now();
         dir.DoublingLink(pop, depth, depth + 1);
-        auto d_end= std::chrono::steady_clock::now();
+        auto d_end = std::chrono::steady_clock::now();
         std::cout << "DoublingLink: " << (d_end - d_start).count() << "\n";
 
         auto root = dir.GetSegment(root_segno);
@@ -527,9 +603,11 @@ namespace Dalea
 #endif
         SegmentPtr buddy = nullptr;
         auto start = std::chrono::steady_clock::now();
-        TX::run(pop, [&]() {
-            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-        });
+        // TX::run(pop, [&]() {
+        //     buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+        // });
+        while ((buddy = segment_pool.Pop()) == nullptr)
+            ;
         auto end = std::chrono::steady_clock::now();
         std::cout << "\nAllocating and initiailize new segment: " << (end - start).count() << "\n";
 
@@ -537,6 +615,7 @@ namespace Dalea
         for (int i = 0; i < SEG_SIZE; i++)
         {
             // do not persist here
+            buddy->buckets[i].SetDepth(bkt.GetDepth());
             if (root->buckets[i].HasAncestor())
             {
                 // avoid chaining

@@ -88,7 +88,7 @@ void bench_thread(std::function<void(const WorkloadItem &)> func,
         lat_end = std::chrono::steady_clock::now();
         time_elapsed += (lat_end - lat_start).count();
         tail.push((lat_end - lat_start).count());
-        latencies.push_back((lat_end - lat_start).count()); // in nanoseconds 
+        latencies.push_back((lat_end - lat_start).count()); // in nanoseconds
         if (++counter == sampling_batch)
         {
             throughput.push_back(sampling_batch / time_elapsed * 1000000000.0);
