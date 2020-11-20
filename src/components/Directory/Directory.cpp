@@ -143,6 +143,7 @@ namespace Dalea
                 });
             }
         }
+
         for (auto i = start; i < end; i++)
         {
             // this buddy is the older buddy

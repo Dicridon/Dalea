@@ -71,7 +71,7 @@ void bench_thread(std::function<void(const WorkloadItem &)> func,
                   std::vector<double> &p99,
                   std::vector<double> &p999)
 {
-    auto sampling_batch = 10000;
+    auto sampling_batch = 20000;
     auto counter = 0;
     std::priority_queue<double> tail;
     std::vector<double> latencies;
@@ -91,7 +91,7 @@ void bench_thread(std::function<void(const WorkloadItem &)> func,
         latencies.push_back((lat_end - lat_start).count()); // in nanoseconds 
         if (++counter == sampling_batch)
         {
-            throughput.push_back(sampling_batch / time_elapsed / 1000000000.0);
+            throughput.push_back(sampling_batch / time_elapsed * 1000000000.0);
             latency.push_back(std::accumulate(latencies.cbegin(), latencies.cend(), 0.0) / sampling_batch);
 
             double tmp_p90 = 0, tmp_p99 = 0, tmp_p999 = 0;

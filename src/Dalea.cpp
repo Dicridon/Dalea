@@ -1,6 +1,8 @@
 #include "Dalea.hpp"
+
 #include <iomanip>
 #include <thread>
+#include <chrono>
 
 #define LINE                                  \
     {                                         \
@@ -460,6 +462,8 @@ namespace Dalea
 #ifdef LOGGING
         Log("entering complex_split\n");
 #endif
+        std::cout << "Doing a complex split\n";
+        auto start = std::chrono::steady_clock::now();
         /* 
          * bucket depth would not be changed during a doubling
          * becaused all puts to this bucket result in 
@@ -473,22 +477,35 @@ namespace Dalea
         auto buddy_segno = root_segno | (1UL << prev_depth);
 
         SegmentPtr buddy = nullptr;
+        auto d_start = std::chrono::steady_clock::now();
         dir.DoublingLink(pop, depth, depth + 1);
+        auto d_end= std::chrono::steady_clock::now();
+        std::cout << "DoublingLink: " << (d_end - d_start).count() << "\n";
 
         auto root = dir.GetSegment(root_segno);
 
         // if (root == dir.GetSegment(buddy_segno))
         // {
+        d_start = std::chrono::steady_clock::now();
         buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+        d_end = std::chrono::steady_clock::now();
+        std::cout << "MakeBuddySegemnt: " << (d_end - d_start).count() << "\n";
         // }
 
         // traditional_split(pop, bkt, hv, segno, true);
+        d_start = std::chrono::steady_clock::now();
         simple_split(pop, root_segno, buddy_segno, bkt, hv.BucketBits());
+        d_end = std::chrono::steady_clock::now();
+        std::cout << "SimpleSplit: " << (d_end - d_start).count() << "\n";
+
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;
         pmemobj_persist(pop.handle(), &depth, sizeof(depth));
         bkt.ClearSplit();
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "Finishing a complex split\n";
+        std::cout << "Time consumed(ns): " << (end - start).count() << "\n";
 #ifdef LOGGING
         Log("leaving complex_split\n");
 #endif
@@ -509,10 +526,14 @@ namespace Dalea
         Log(log);
 #endif
         SegmentPtr buddy = nullptr;
+        auto start = std::chrono::steady_clock::now();
         TX::run(pop, [&]() {
             buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
         });
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "\nAllocating and initiailize new segment: " << (end - start).count() << "\n";
 
+        start = std::chrono::steady_clock::now();
         for (int i = 0; i < SEG_SIZE; i++)
         {
             // do not persist here
@@ -536,9 +557,15 @@ namespace Dalea
 #endif
             }
         }
+        end = std::chrono::steady_clock::now();
+        std::cout << "\nInitiailize buckets in new segment: " << (end - start).count() << "\n";
+
+        start = std::chrono::steady_clock::now();
         TX::run(pop, [&]() {
             dir.AddSegment(pop, buddy, buddy_segno);
         });
+        end = std::chrono::steady_clock::now();
+        std::cout << "\nAdding segment: " << (end - start).count() << "\n";
         return buddy;
     }
 } // namespace Dalea
