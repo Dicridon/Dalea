@@ -8,6 +8,7 @@
     {                                         \
         Log(std::to_string(__LINE__) + "\n"); \
     }
+// #ifdef TIMING
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -22,11 +23,11 @@ namespace Dalea
     bool SegmentPtrQueue::Push(const SegmentPtr &ptr) noexcept
     {
         std::unique_lock _(lock);
-        if ((tail + 1) % capacity == head)
+        if (size == capacity)
         {
             return false;
         }
-        buffer[tail++] = ptr;
+        buffer[(tail++) % capacity] = ptr;
         size++;
         return true;
     }
@@ -34,22 +35,22 @@ namespace Dalea
     SegmentPtr SegmentPtrQueue::Top() noexcept
     {
         std::unique_lock _(lock);
-        if (head == tail)
+        if (size == 0)
         {
             return nullptr;
         }
-        return buffer[head];
+        return buffer[head % capacity];
     }
 
     SegmentPtr SegmentPtrQueue::Pop() noexcept
     {
         std::unique_lock _(lock);
-        if (head != tail)
+        if (size == 0)
         {
             return nullptr;
         }
         size--;
-        return buffer[head--];
+        return buffer[(head++) % capacity];
     }
 
     bool SegmentPtrQueue::HasSpace() const noexcept
@@ -72,20 +73,21 @@ namespace Dalea
                 segment_pool.Push(ptr);
             }
         });
-        auto t = std::thread([&](PoolBase &pop, SegmentPtrQueue &queue) {
-            if (queue.size <= queue.capacity - 50)
-            {
-                for (int i = 0; i < 50; i++)
+        std::thread([&](PoolBase &pop, SegmentPtrQueue &queue) {
+            while(1) {
+                if (queue.size < queue.capacity - 50)
                 {
-                    TX::run(pop, [&]() {
-                        auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                        queue.Push(ptr);
-                    });
+                    for (int i = 0; i < 50; i++)
+                    {
+                        TX::run(pop, [&]() {
+                            auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                            queue.Push(ptr);
+                        });
+                    }
                 }
+                std::this_thread::sleep_for(2s);
             }
-            std::this_thread::sleep_for(2s);
-        },
-                             std::ref(pop), std::ref(segment_pool));
+        }, std::ref(pop), std::ref(segment_pool)).detach();
     }
 
     FunctionStatus HashTable::Put(PoolBase &pop, const std::string &key, const std::string &value) noexcept
@@ -538,8 +540,10 @@ namespace Dalea
 #ifdef LOGGING
         Log("entering complex_split\n");
 #endif
+#ifdef TIMING
         std::cout << "Doing a complex split\n";
         auto start = std::chrono::steady_clock::now();
+#endif
         /* 
          * bucket depth would not be changed during a doubling
          * becaused all puts to this bucket result in 
@@ -553,35 +557,47 @@ namespace Dalea
         auto buddy_segno = root_segno | (1UL << prev_depth);
 
         SegmentPtr buddy = nullptr;
+#ifdef TIMING
         auto d_start = std::chrono::steady_clock::now();
+#endif
         dir.DoublingLink(pop, depth, depth + 1);
+#ifdef TIMING
         auto d_end = std::chrono::steady_clock::now();
         std::cout << "DoublingLink: " << (d_end - d_start).count() << "\n";
-
+#endif
         auto root = dir.GetSegment(root_segno);
 
         // if (root == dir.GetSegment(buddy_segno))
         // {
+#ifdef TIMING
         d_start = std::chrono::steady_clock::now();
+#endif
         buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+#ifdef TIMING
         d_end = std::chrono::steady_clock::now();
         std::cout << "MakeBuddySegemnt: " << (d_end - d_start).count() << "\n";
+#endif
         // }
 
         // traditional_split(pop, bkt, hv, segno, true);
+#ifdef TIMING
         d_start = std::chrono::steady_clock::now();
+#endif
         simple_split(pop, root_segno, buddy_segno, bkt, hv.BucketBits());
+#ifdef TIMING
         d_end = std::chrono::steady_clock::now();
         std::cout << "SimpleSplit: " << (d_end - d_start).count() << "\n";
-
+#endif
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
         ++depth;
         pmemobj_persist(pop.handle(), &depth, sizeof(depth));
         bkt.ClearSplit();
+#ifdef TIMING
         auto end = std::chrono::steady_clock::now();
         std::cout << "Finishing a complex split\n";
         std::cout << "Time consumed(ns): " << (end - start).count() << "\n";
+#endif
 #ifdef LOGGING
         Log("leaving complex_split\n");
 #endif
@@ -602,16 +618,20 @@ namespace Dalea
         Log(log);
 #endif
         SegmentPtr buddy = nullptr;
+#ifdef TIMING
         auto start = std::chrono::steady_clock::now();
+#endif
         // TX::run(pop, [&]() {
         //     buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
         // });
         while ((buddy = segment_pool.Pop()) == nullptr)
             ;
+        buddy->segment_no = buddy_segno;
+#ifdef TIMING
         auto end = std::chrono::steady_clock::now();
         std::cout << "\nAllocating and initiailize new segment: " << (end - start).count() << "\n";
-
         start = std::chrono::steady_clock::now();
+#endif
         for (int i = 0; i < SEG_SIZE; i++)
         {
             // do not persist here
@@ -636,15 +656,19 @@ namespace Dalea
 #endif
             }
         }
+#ifdef TIMING
         end = std::chrono::steady_clock::now();
         std::cout << "\nInitiailize buckets in new segment: " << (end - start).count() << "\n";
 
         start = std::chrono::steady_clock::now();
+#endif
         TX::run(pop, [&]() {
             dir.AddSegment(pop, buddy, buddy_segno);
         });
+#ifdef TIMING
         end = std::chrono::steady_clock::now();
         std::cout << "\nAdding segment: " << (end - start).count() << "\n";
+#endif
         return buddy;
     }
 } // namespace Dalea
