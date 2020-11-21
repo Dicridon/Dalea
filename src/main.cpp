@@ -54,17 +54,16 @@ auto prepare_pool(std::string &file, size_t size)
     return pop;
 }
 
-auto prepare_root(pobj::pool<DaleaRoot> &pop, int threads)
+auto prepare_root(pobj::pool<DaleaRoot> &pop)
 {
     auto r = pop.root();
     TX::run(pop, [&]() {
-        r->map = pobj::make_persistent<HashTable>(pop, threads);
+        r->map = pobj::make_persistent<HashTable>(pop);
     });
     return r;
 }
 
-void bench_thread(std::function<void(int, const WorkloadItem &, Stats &)> func,
-                  int thread_id, 
+void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
                   std::vector<Stats> &stats,
                   std::vector<WorkloadItem> &workload,
                   std::vector<double> &throughput,
@@ -86,7 +85,7 @@ void bench_thread(std::function<void(int, const WorkloadItem &, Stats &)> func,
     {
         lat_start = std::chrono::steady_clock::now();
 
-        func(thread_id, i, st);
+        func(i, st);
 
         lat_end = std::chrono::steady_clock::now();
         time_elapsed += (lat_end - lat_start).count();
@@ -155,7 +154,7 @@ int main(int argc, char *argv[])
     std::cout << "   batch size is " << batch << "\n";
 
     auto pop = prepare_pool(pool_file, 10240);
-    auto root = prepare_root(pop, threads);
+    auto root = prepare_root(pop);
 
     {
         std::thread workers[threads];
@@ -207,17 +206,17 @@ int main(int argc, char *argv[])
             workloads[(count++) % threads].push_back(WorkloadItem(type, key));
         }
 
-        auto consume = [&](int thread_id, const WorkloadItem &item, Stats &stats) {
+        auto consume = [&](const WorkloadItem &item, Stats &stats) {
             switch (item.type)
             {
             case Ops::Insert:
-                root->map->Put(thread_id, pop, stats, item.key, item.key);
+                root->map->Put(pop, stats, item.key, item.key);
                 break;
             case Ops::Read:
                 root->map->Get(item.key);
                 break;
             case Ops::Update:
-                root->map->Put(thread_id, pop, stats, item.key, item.key);
+                root->map->Put(pop, stats, item.key, item.key);
                 break;
             case Ops::Delete:
                 root->map->Remove(pop, item.key);
@@ -232,7 +231,6 @@ int main(int argc, char *argv[])
         {
             workers[i] = std::thread(bench_thread,
                                      consume,
-                                     i,
                                      std::ref(statses[i]),
                                      std::ref(workloads[i]),
                                      std::ref(throughputs[i]),
