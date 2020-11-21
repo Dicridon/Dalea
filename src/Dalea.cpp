@@ -11,8 +11,16 @@
 #define TIMING
 namespace Dalea
 {
-    SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
+    SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap)
     {
+        Init(pop, init_cap);
+    }
+
+    void SegmentPtrQueue::Init(PoolBase &pop, int init_cap)
+    {
+        capacity = init_cap;
+
+        size = 0;
         TX::run(pop, [&]() {
             buffer = pobj::make_persistent<SegmentPtr[]>(init_cap + 1);
         });
@@ -58,23 +66,29 @@ namespace Dalea
         return size != capacity;
     }
 
-    HashTable::HashTable(PoolBase &pop)
+    HashTable::HashTable(PoolBase &pop, int threads)
         : dir(pop),
           depth(1),
           to_double(false),
           readers(0),
-          logger(std::string("./dalea.log")),
-          segment_pool(pop, 16184)
+          logger(std::string("./dalea.log"))
     {
+
         TX::run(pop, [&]() {
-            for (int i = 0; i < 16184; i++)
+            segment_pools = pobj::make_persistent<SegmentPtrQueue[]>(threads);
+            for (int i = 0; i < threads; i++)
             {
-                auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                segment_pool.Push(ptr);
+                segment_pools[i].Init(pop, 512);
+                for (int j = 0; j < 512; j++)
+                {
+                    auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                    segment_pools[i].Push(ptr);
+                }
             }
         });
         auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
-            while(1) {
+            while (1)
+            {
                 while (queue.HasSpace())
                 {
                     TX::run(pop, [&]() {
@@ -85,13 +99,14 @@ namespace Dalea
                 std::cout << "refilled\n";
             }
         };
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
+
+        for (int i = 0; i < threads; i++)
+        {
+            std::thread(guardian, std::ref(pop), std::ref(segment_pools[i])).detach();
+        }
     }
 
-    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
+    FunctionStatus HashTable::Put(int thread_id, PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
 
@@ -166,7 +181,7 @@ namespace Dalea
         case FunctionStatus::SplitRequired:
         {
             // lock is acquired inside split depending on global depth
-            split(pop, stats, *bkt, hv, seg, seg->segment_no);
+            split(thread_id, pop, stats, *bkt, hv, seg, seg->segment_no);
 
 #ifdef LOGGING
             std::stringstream buf;
@@ -325,7 +340,7 @@ namespace Dalea
     /*
      * bucket bkt is already locked if this method is called
      */
-    void HashTable::split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::split(int thread_id, PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
 #ifdef LOGGING
         Log(">>>> entering split\n");
@@ -334,7 +349,7 @@ namespace Dalea
         if (local_depth < depth)
         {
             // this function would decides if a simple split or a traditional split is required
-            traditional_split(pop, stats, bkt, hv, segno, false);
+            traditional_split(thread_id, pop, stats, bkt, hv, segno, false);
         }
         else
         {
@@ -362,7 +377,7 @@ namespace Dalea
             }
             auto wait_end = std::chrono::steady_clock::now();
             std::cout << "complex waited for(ns): " << (wait_end - start).count() << "\n";
-            complex_split(pop, stats, bkt, hv, seg, segno);
+            complex_split(thread_id, pop, stats, bkt, hv, seg, segno);
             // these two lines are executed inside compelx_split for fine-grained concurrency
             // doubling_lock.unlock();
             // to_double = false;
@@ -395,7 +410,7 @@ namespace Dalea
      *  concurrent sweep seems to be viable, for each thread touches different kvs, ther is no conflicts
      *  but should ensure the correctness of global depth after a crash
      */
-    void HashTable::simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
+    void HashTable::simple_split(int thread_id, PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
     {
         stats.simple_splits++;
         auto start = std::chrono::steady_clock::now();
@@ -430,7 +445,7 @@ namespace Dalea
                 // TX::run(pop, [&]() {
                 //     pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
                 // });
-                if ((pre_seg = segment_pool.Pop()) == nullptr)
+                if ((pre_seg = segment_pools[thread_id].Pop()) == nullptr)
                 {
                     std::cout << "empty pool in simple\n";
                     TX::run(pop, [&]() {
@@ -507,7 +522,7 @@ namespace Dalea
      * it decides whether to allocate or not, if allocating, then a traditional split is done
      * if not, a simple split is enough.
      */
-    void HashTable::traditional_split(PoolBase &pop, Stats &stats,  Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
+    void HashTable::traditional_split(int thread_id, PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
 #ifdef LOGGING
         Log("entering traditional_split\n");
@@ -532,13 +547,13 @@ namespace Dalea
         auto buddy = dir.LockSegment(buddy_segno);
         if (root == buddy)
         {
-            make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+            make_buddy_segment(thread_id, pop, root, segno, buddy_segno, bkt);
             stats.traditional_splits++;
             stats.simple_splits--;
         }
         dir.UnlockSegment(buddy_segno);
 
-        simple_split(pop, stats, root_segno, buddy_segno, bkt, bktbits);
+        simple_split(thread_id, pop, stats, root_segno, buddy_segno, bkt, bktbits);
 #ifdef LOGGING
         Log("leaving traditional_split\n");
 #endif
@@ -555,7 +570,7 @@ namespace Dalea
      * 
      * only one thread woulding calling this method
      */
-    void HashTable::complex_split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
+    void HashTable::complex_split(int thread_id, PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept
     {
         stats.complex_splits++;
 #ifdef LOGGING
@@ -598,7 +613,7 @@ namespace Dalea
         dir.LockSegment(buddy_segno);
         doubling_lock.unlock();
         to_double = false;
-        buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+        buddy = make_buddy_segment(thread_id, pop, root, segno, buddy_segno, bkt);
 #ifdef TIMING
         d_end = std::chrono::steady_clock::now();
         std::cout << "MakeBuddySegemnt: " << (d_end - d_start).count() << "\n";
@@ -609,7 +624,7 @@ namespace Dalea
 #ifdef TIMING
         d_start = std::chrono::steady_clock::now();
 #endif
-        simple_split(pop, stats, root_segno, buddy_segno, bkt, hv.BucketBits());
+        simple_split(thread_id, pop, stats, root_segno, buddy_segno, bkt, hv.BucketBits());
 #ifdef TIMING
         d_end = std::chrono::steady_clock::now();
         std::cout << "SimpleSplit: " << (d_end - d_start).count() << "\n";
@@ -635,7 +650,7 @@ namespace Dalea
     {
     }
 
-    SegmentPtr HashTable::make_buddy_segment(PoolBase &pop, const SegmentPtr &root, uint64_t segno, uint64_t buddy_segno, const Bucket &bkt) noexcept
+    SegmentPtr HashTable::make_buddy_segment(int thread_id, PoolBase &pop, const SegmentPtr &root, uint64_t segno, uint64_t buddy_segno, const Bucket &bkt) noexcept
     {
 #ifdef LOGGING
         std::stringstream log;
@@ -649,7 +664,7 @@ namespace Dalea
         // TX::run(pop, [&]() {
         //     buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
         // });
-        if ((buddy = segment_pool.Pop()) == nullptr)
+        if ((buddy = segment_pools[thread_id].Pop()) == nullptr)
         {
             std::cout << "empty pool in traditional\n";
             TX::run(pop, [&]() {
