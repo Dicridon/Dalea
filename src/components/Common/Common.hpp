@@ -33,7 +33,7 @@ namespace Dalea
     };
 
 #ifndef DEBUG
-    constexpr int BUCKET_SIZE = 16;
+    constexpr int BUCKET_SIZE = 10;
     constexpr int META_BITS = 16;
     constexpr int BUCKET_BITS = 10;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
