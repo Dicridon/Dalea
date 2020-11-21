@@ -64,10 +64,10 @@ namespace Dalea
           to_double(false),
           readers(0),
           logger(std::string("./dalea.log")),
-          segment_pool(pop, 4096)
+          segment_pool(pop, 8192)
     {
         TX::run(pop, [&]() {
-            for (int i = 0; i < 4096; i++)
+            for (int i = 0; i < 8192; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr);
@@ -82,7 +82,6 @@ namespace Dalea
                         queue.Push(ptr);
                     });
                 }
-                std::this_thread::sleep_for(1ms);
             }
         }, std::ref(pop), std::ref(segment_pool)).detach();
     }
@@ -97,7 +96,6 @@ namespace Dalea
         // directory doubling concurrency control
         if (to_double)
         {
-            std::this_thread::yield();
             goto RETRY;
         }
 
@@ -138,7 +136,6 @@ namespace Dalea
         {
             // reader_lock.unlock_shared();
             --readers;
-            std::this_thread::yield();
             goto RETRY;
         }
 #ifdef LOGGING
@@ -160,7 +157,6 @@ namespace Dalea
             bkt->Unlock();
             //reader_lock.unlock_shared();
             --readers;
-            std::this_thread::yield();
             goto RETRY;
         case FunctionStatus::SplitRequired:
         {
@@ -177,7 +173,6 @@ namespace Dalea
             bkt->Unlock();
             // reader_lock.unlock_shared();
             --readers;
-            std::this_thread::yield();
             goto RETRY;
         case FunctionStatus::FlattenRequired:
         {
@@ -341,6 +336,7 @@ namespace Dalea
 #ifdef LOGGING
             Log(">>>> to complex split ");
 #endif
+            auto start = std::chrono::steady_clock::now();
             auto expected = false;
             to_double.compare_exchange_strong(expected, true);
             if (expected)
@@ -359,9 +355,14 @@ namespace Dalea
 #endif
                 return;
             }
+            auto wait_end = std::chrono::steady_clock::now();
+            std::cout << "complex waited for(ns): " << (wait_end - start).count() << "\n";
             complex_split(pop, stats, bkt, hv, seg, segno);
-            doubling_lock.unlock();
-            to_double = false;
+            // these two lines are executed inside compelx_split for fine-grained concurrency
+            // doubling_lock.unlock();
+            // to_double = false;
+            auto end = std::chrono::steady_clock::now();
+            std::cout << "complex split consumed(ns) in total: " << (end - start).count() << "\n";
         }
 #ifdef LOGGING
         Log(">>>> leaving split\n");
@@ -392,6 +393,7 @@ namespace Dalea
     void HashTable::simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
     {
         stats.simple_splits++;
+        auto start = std::chrono::steady_clock::now();
 #ifdef LOGGING
         Log(">>>> entering simple_split\n");
 #endif
@@ -420,9 +422,12 @@ namespace Dalea
                 // a reference pointer pointing to one ancestor
                 // dir.SetSegment(pop, buddy_seg, walk);
                 SegmentPtr pre_seg = nullptr;
-                TX::run(pop, [&]() {
-                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                });
+                // TX::run(pop, [&]() {
+                //     pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                // });
+                while((pre_seg = segment_pool.Pop()) == nullptr)
+                    ;
+                pre_seg->segment_no = walk;
 #ifdef LOGGING
                 std::stringstream log;
                 log << ">>>> creating new segment " << walk << " which connects to "
@@ -471,6 +476,8 @@ namespace Dalea
             walk_ptr->buckets[bktbits].Lock();
             walk_ptr->buckets[bktbits].SetAncestorPersist(pop, buddy_segno);
             walk_ptr->buckets[bktbits].Unlock();
+            auto end = std::chrono::steady_clock::now();
+            stats.simple_split_time += (end - start).count();
         }
         /*
          * unlock buddy bucket here to prevent chaos: buddy bucket is filled up when
@@ -489,7 +496,6 @@ namespace Dalea
      */
     void HashTable::traditional_split(PoolBase &pop, Stats &stats,  Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
-        stats.traditional_splits++;
 #ifdef LOGGING
         Log("entering traditional_split\n");
 #endif
@@ -514,6 +520,8 @@ namespace Dalea
         if (root == buddy)
         {
             make_buddy_segment(pop, root, segno, buddy_segno, bkt);
+            stats.traditional_splits++;
+            stats.simple_splits--;
         }
         dir.UnlockSegment(buddy_segno);
 
@@ -572,6 +580,11 @@ namespace Dalea
 #ifdef TIMING
         d_start = std::chrono::steady_clock::now();
 #endif
+        ++depth;
+        pmemobj_persist(pop.handle(), &depth, sizeof(depth));
+        dir.LockSegment(buddy_segno);
+        doubling_lock.unlock();
+        to_double = false;
         buddy = make_buddy_segment(pop, root, segno, buddy_segno, bkt);
 #ifdef TIMING
         d_end = std::chrono::steady_clock::now();
@@ -590,9 +603,8 @@ namespace Dalea
 #endif
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
-        ++depth;
-        pmemobj_persist(pop.handle(), &depth, sizeof(depth));
         bkt.ClearSplit();
+        dir.UnlockSegment(buddy_segno);
 #ifdef TIMING
         auto end = std::chrono::steady_clock::now();
         std::cout << "Finishing a complex split\n";
@@ -631,7 +643,7 @@ namespace Dalea
         buddy->segment_no = buddy_segno;
 #ifdef TIMING
         auto end = std::chrono::steady_clock::now();
-        std::cout << "\nAllocating and initiailize new segment: " << (end - start).count() << "\n";
+        std::cout << "Allocating and initiailize new segment: " << (end - start).count() << "\n";
         start = std::chrono::steady_clock::now();
 #endif
         for (int i = 0; i < SEG_SIZE; i++)
@@ -660,7 +672,7 @@ namespace Dalea
         }
 #ifdef TIMING
         end = std::chrono::steady_clock::now();
-        std::cout << "\nInitiailize buckets in new segment: " << (end - start).count() << "\n";
+        std::cout << "Initiailize buckets in new segment: " << (end - start).count() << "\n";
 
         start = std::chrono::steady_clock::now();
 #endif
@@ -669,7 +681,7 @@ namespace Dalea
         });
 #ifdef TIMING
         end = std::chrono::steady_clock::now();
-        std::cout << "\nAdding segment: " << (end - start).count() << "\n";
+        std::cout << "nAdding segment: " << (end - start).count() << "\n";
 #endif
         return buddy;
     }
