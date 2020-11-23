@@ -17,15 +17,15 @@ namespace Dalea
     KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value) const noexcept
     {
         std::shared_lock s(*mux);
-        auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
-        for (auto search = 0; search < BUCKET_SIZE; search++)
+        // auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
+        for (auto search = 0; search < BUCKET_SIZE - 1; search+=2)
         {
-            auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
-            if (f != encoding)
-            {
-                // no need to persist
-                fingerprints[search].IsInvalid();
-            }
+            // auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
+            // if (f != encoding)
+            // {
+            //     // no need to persist
+            //     fingerprints[search].Invalidate();
+            // }
             if (fingerprints[search] == hash_value)
             {
                 if (pairs[search]->key == key)

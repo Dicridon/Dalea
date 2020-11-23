@@ -8,7 +8,8 @@
     {                                         \
         Log(std::to_string(__LINE__) + "\n"); \
     }
-#define TIMING
+// #define TIMING
+#define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -64,10 +65,11 @@ namespace Dalea
           to_double(false),
           readers(0),
           logger(std::string("./dalea.log")),
-          segment_pool(pop, 16184)
+          segment_pool(pop, 4096)
     {
+#ifdef PREALLOCATION
         TX::run(pop, [&]() {
-            for (int i = 0; i < 16184; i++)
+            for (int i = 0; i < 4096; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr);
@@ -82,13 +84,13 @@ namespace Dalea
                         queue.Push(ptr);
                     });
                 }
-                std::cout << "refilled\n";
             }
         };
         std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
         std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
         std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
         std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
+#endif
     }
 
     FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
@@ -427,9 +429,11 @@ namespace Dalea
                 // a reference pointer pointing to one ancestor
                 // dir.SetSegment(pop, buddy_seg, walk);
                 SegmentPtr pre_seg = nullptr;
-                // TX::run(pop, [&]() {
-                //     pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
-                // });
+#ifndef PREALLOCATION
+                TX::run(pop, [&]() {
+                    pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                });
+#else
                 if ((pre_seg = segment_pool.Pop()) == nullptr)
                 {
                     std::cout << "empty pool in simple\n";
@@ -441,6 +445,7 @@ namespace Dalea
                 {
                     pre_seg->segment_no = walk;
                 }
+#endif
 #ifdef LOGGING
                 std::stringstream log;
                 log << ">>>> creating new segment " << walk << " which connects to "
@@ -646,9 +651,12 @@ namespace Dalea
 #ifdef TIMING
         auto start = std::chrono::steady_clock::now();
 #endif
-        // TX::run(pop, [&]() {
-        //     buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
-        // });
+
+#ifndef PREALLOCATION
+        TX::run(pop, [&]() {
+            buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+        });
+#else
         if ((buddy = segment_pool.Pop()) == nullptr)
         {
             std::cout << "empty pool in traditional\n";
@@ -660,6 +668,7 @@ namespace Dalea
         {
             buddy->segment_no = buddy_segno;
         }
+#endif
 #ifdef TIMING
         auto end = std::chrono::steady_clock::now();
         std::cout << "Allocating and initiailize new segment: " << (end - start).count() << "\n";

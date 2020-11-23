@@ -13,6 +13,8 @@
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
 
+#define VALIATION
+
 using namespace Dalea;
 
 const std::string PUT = "INSERT";
@@ -168,11 +170,20 @@ int main(int argc, char *argv[])
 
         std::ifstream warmup;
         std::ifstream run;
-        // warmup.open(warm_file);
+        warmup.open(warm_file);
         run.open(run_file);
         std::string buffer;
+
+        std::cout << "warming up\n";
+        Stats _unused;
+        while(getline(warmup, buffer))
+        {
+            std::string key = buffer.c_str() + PUT.length();
+            root->map->Put(pop, _unused, key, key);
+        }
         auto count = 0;
         auto load = 0;
+        std::cout << "starts running\n";
         while (getline(run, buffer))
         {
             ++load;
@@ -245,9 +256,9 @@ int main(int argc, char *argv[])
             t.join();
         }
         auto end = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+        auto duration = (end - start).count();
         std::cout << "time elapsed is " << duration << "\n";
-        std::cout << "throughput is " << double(load) / duration << "\n";
+        std::cout << "throughput is " << double(load) / duration * 1000000000.0 << "\n";
 
         std::cout << "\nreporting throughput by thread:\n";
         for (auto i = 0; i < threads; i++)
