@@ -65,6 +65,7 @@ namespace Dalea
           to_double(false),
           readers(0),
           logger(std::string("./dalea.log")),
+          capacity(2 * SEG_SIZE * BUCKET_SIZE),
           segment_pool(pop, 4096)
     {
 #ifdef PREALLOCATION
@@ -197,6 +198,7 @@ namespace Dalea
             bkt->Unlock();
             // reader_lock.unlock_shared();
             --readers;
+            ++loaded;
             return ret;
         }
     }
@@ -428,6 +430,7 @@ namespace Dalea
             {
                 // a reference pointer pointing to one ancestor
                 // dir.SetSegment(pop, buddy_seg, walk);
+                capacity += SEG_SIZE * BUCKET_SIZE;
                 SegmentPtr pre_seg = nullptr;
 #ifndef PREALLOCATION
                 TX::run(pop, [&]() {
@@ -540,6 +543,7 @@ namespace Dalea
             make_buddy_segment(pop, root, segno, buddy_segno, bkt);
             stats.traditional_splits++;
             stats.simple_splits--;
+            capacity += SEG_SIZE * BUCKET_SIZE;
         }
         dir.UnlockSegment(buddy_segno);
 

@@ -70,6 +70,7 @@ namespace Dalea
             {
                 if (pairs[search]->key == key)
                 {
+                    // Not a good update strategy
                     // TX::manual tx(pop);
                     pairs[search]->value = value;
                     // TX::commit();

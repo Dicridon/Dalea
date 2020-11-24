@@ -1,6 +1,14 @@
 # Dalea: **D**irectory-sh**a**ring Multi**l**evel **E**xtendible **H**ash
 A persistent extendible hash which has extremely low split cost
 
+# Building
+Currently building tool `canoe` is used to manage this project, which is a ruby gem requiring Ruby >= 2.7.1, please using `rvm` and `gem` to install Ruby 2.7.1 and `canoe`.
+
+A `Makefile` would be added later.
+
+# Test
+please offer a bench file containing lines in format of `INSERT/READ/UPDATE/DELETE data`, which is also use by CLevel.
+
 ## Main indexes
 1. Throughput (varying segment and bucket size)
 2. load factor

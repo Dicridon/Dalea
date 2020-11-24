@@ -38,6 +38,7 @@ namespace Dalea
         FunctionStatus Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept;
         KVPairPtr Get(const std::string &key) const noexcept;
         FunctionStatus Remove(PoolBase &pop, const std::string &key) noexcept;
+        uint64_t Capacity() const noexcept;
         void Destory() noexcept;
         void Debug() const noexcept;
         void DebugToLog() const;
@@ -49,6 +50,9 @@ namespace Dalea
         uint8_t depth;
         bool doubling;
         Directory dir;
+
+        uint64_t capacity;
+        uint64_t loaded;
 
         std::atomic_bool to_double;
         std::atomic_int readers;
