@@ -21,7 +21,9 @@ namespace Dalea
             std::shared_mutex *mutexes;
         };
 
-        using SubDirectoryPtr = pobj::persistent_ptr<SubDirectory>;
+        // using SubDirectoryPtr = pobj::persistent_ptr<SubDirectory>;
+        using SubDirectoryPtr = SubDirectory *;
+
         struct MetaDirectory
         {
             MetaDirectory(PoolBase &pop);

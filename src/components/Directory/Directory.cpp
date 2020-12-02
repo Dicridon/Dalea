@@ -4,8 +4,8 @@ namespace Dalea
     Directory::MetaDirectory::MetaDirectory(PoolBase &pop)
     {
         TX::run(pop, [&]() {
-            subdirectories[0] = pobj::make_persistent<Directory::SubDirectory>(pop);
-            pop.persist(subdirectories[0]);
+            subdirectories[0] = pobj::make_persistent<Directory::SubDirectory>(pop).get();
+            pop.persist(subdirectories[0], sizeof(Directory::SubDirectory));
         });
         for (int i = 1; i < METADIR_SIZE; i++)
         {
@@ -16,10 +16,10 @@ namespace Dalea
     Directory::SubDirectory::SubDirectory(PoolBase &pop)
     {
         TX::run(pop, [&]() {
-            segments[0] = pobj::make_persistent<Segment>(pop, 1, 0, false);
-            segments[1] = pobj::make_persistent<Segment>(pop, 1, 1, false);
-            pop.persist(segments[0]);
-            pop.persist(segments[1]);
+            segments[0] = pobj::make_persistent<Segment>(pop, 1, 0, false).get();
+            segments[1] = pobj::make_persistent<Segment>(pop, 1, 1, false).get();
+            pop.persist(segments[0], sizeof(Segment));
+            pop.persist(segments[1], sizeof(Segment));
         });
 
         for (int i = 2; i < SUBDIR_SIZE; i++)
@@ -102,7 +102,7 @@ namespace Dalea
         if (meta.subdirectories[sub] == nullptr)
         {
             TX::run(pop, [&]() {
-                meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop);
+                meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop).get();
             });
         }
         meta.subdirectories[sub]->segments[seg] = ptr;
@@ -139,7 +139,7 @@ namespace Dalea
             if (meta.subdirectories[sub] == nullptr)
             {
                 TX::run(pop, [&]() {
-                    meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop);
+                    meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop).get();
                 });
             }
         }

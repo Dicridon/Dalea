@@ -5,7 +5,8 @@ namespace Dalea
 {
     class Directory;
     class Segment;
-    using SegmentPtr = pmem::obj::persistent_ptr<Segment>;
+    // using SegmentPtr = pmem::obj::persistent_ptr<Segment>;
+    using SegmentPtr = Segment *;
     enum class SegStatus
     {
         Quiescent,

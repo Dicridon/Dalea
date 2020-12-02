@@ -4,7 +4,7 @@ namespace Dalea
     SegmentPtr Segment::New(PoolBase &pop, uint8_t depth, uint64_t seg_no)
     {
         SegmentPtr seg;
-        seg = pobj::make_persistent<Segment>(pop, depth, seg_no, false);
+        seg = pobj::make_persistent<Segment>(pop, depth, seg_no, false).get();
         return seg;
     }
 

@@ -73,7 +73,7 @@ namespace Dalea
             for (int i = 0; i < 4096; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                segment_pool.Push(ptr);
+                segment_pool.Push(ptr.get());
             }
         });
         auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
@@ -82,7 +82,7 @@ namespace Dalea
                 {
                     TX::run(pop, [&]() {
                         auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                        queue.Push(ptr);
+                        queue.Push(ptr.get());
                     });
                 }
             }
@@ -441,7 +441,7 @@ namespace Dalea
                 {
                     std::cout << "empty pool in simple\n";
                     TX::run(pop, [&]() {
-                        pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
+                        pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true).get();
                     });
                 }
                 else
@@ -665,7 +665,7 @@ namespace Dalea
         {
             std::cout << "empty pool in traditional\n";
             TX::run(pop, [&]() {
-                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
+                buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true).get();
             });
         }
         else
