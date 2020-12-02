@@ -9,7 +9,7 @@
         Log(std::to_string(__LINE__) + "\n"); \
     }
 // #define TIMING
-#define PREALLOCATION
+// #define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -66,31 +66,18 @@ namespace Dalea
           readers(0),
           logger(std::string("./dalea.log")),
           capacity(2 * SEG_SIZE * BUCKET_SIZE),
-          segment_pool(pop, 4096)
+          segment_pool(pop, 16396)
     {
+        std::cout << "segment pool is at " << &segment_pool << "\n";
 #ifdef PREALLOCATION
         TX::run(pop, [&]() {
-            for (int i = 0; i < 4096; i++)
+            for (int i = 0; i < 16396; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr);
             }
         });
-        auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
-            while(1) {
-                while (queue.HasSpace())
-                {
-                    TX::run(pop, [&]() {
-                        auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
-                        queue.Push(ptr);
-                    });
-                }
-            }
-        };
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
-        std::thread(guardian, std::ref(pop), std::ref(segment_pool)).detach();
+
 #endif
     }
 
@@ -234,12 +221,20 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
+    uint64_t HashTable::Capacity() const noexcept
+    {
+        return capacity;
+    }
+
     void HashTable::Destory() noexcept
     {
     }
 
     void HashTable::Debug() const noexcept
     {
+        segment_pool.Pop();
+        std::cout << "segment pool is now " << segment_pool.size << "\n";
+        /*
         for (uint64_t i = 0; i < (1UL << depth); i++)
         {
             std::cout << std::setw(4) << i << " ";
@@ -267,6 +262,7 @@ namespace Dalea
             }
             std::cout << std::endl;
         }
+        */
     }
 
     void HashTable::DebugToLog() const
@@ -402,6 +398,7 @@ namespace Dalea
     void HashTable::simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept
     {
         stats.simple_splits++;
+        capacity += BUCKET_SIZE;
         auto start = std::chrono::steady_clock::now();
 #ifdef LOGGING
         Log(">>>> entering simple_split\n");
@@ -430,7 +427,6 @@ namespace Dalea
             {
                 // a reference pointer pointing to one ancestor
                 // dir.SetSegment(pop, buddy_seg, walk);
-                capacity += SEG_SIZE * BUCKET_SIZE;
                 SegmentPtr pre_seg = nullptr;
 #ifndef PREALLOCATION
                 TX::run(pop, [&]() {
@@ -439,7 +435,6 @@ namespace Dalea
 #else
                 if ((pre_seg = segment_pool.Pop()) == nullptr)
                 {
-                    std::cout << "empty pool in simple\n";
                     TX::run(pop, [&]() {
                         pre_seg = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), walk, true);
                     });
@@ -663,7 +658,6 @@ namespace Dalea
 #else
         if ((buddy = segment_pool.Pop()) == nullptr)
         {
-            std::cout << "empty pool in traditional\n";
             TX::run(pop, [&]() {
                 buddy = pobj::make_persistent<Segment>(pop, bkt.GetDepth(), buddy_segno, true);
             });

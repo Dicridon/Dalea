@@ -133,8 +133,10 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
     }
 }
 
+
 int main(int argc, char *argv[])
 {
+    
     Dalea::CmdParser parser;
     if (argc < 4 || !parser.buildCmdParser(argc, argv))
     {
@@ -158,6 +160,25 @@ int main(int argc, char *argv[])
     auto pop = prepare_pool(pool_file, 10240);
     auto root = prepare_root(pop);
 
+    using namespace std::chrono_literals;
+    bool to_stop = false;
+    auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
+        while(!to_stop) {
+            while (queue.HasSpace())
+            {
+                // std::cout << "[[[[[[[[[[[[[[[[[[[[ refilling\n";
+                TX::run(pop, [&]() {
+                    auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
+                    queue.Push(ptr);
+                });
+            }
+        }
+    };
+
+
+    std::thread(guardian, std::ref(pop), std::ref(root->map->segment_pool)).detach();
+    std::thread(guardian, std::ref(pop), std::ref(root->map->segment_pool)).detach();
+
     {
         std::thread workers[threads];
         std::vector<WorkloadItem> workloads[threads];
@@ -176,11 +197,18 @@ int main(int argc, char *argv[])
 
         std::cout << "warming up\n";
         Stats _unused;
+        auto load_count = 0;
         while(getline(warmup, buffer))
         {
             std::string key = buffer.c_str() + PUT.length();
             root->map->Put(pop, _unused, key, key);
+            ++load_count;
+            // if (load_count % 160000 == 0)
+            // {
+            //     std::cout << "loadfactor: " << double(load_count) / root->map->Capacity() << '\n';
+            // }
         }
+
         auto count = 0;
         auto load = 0;
         std::cout << "starts running\n";
@@ -220,20 +248,20 @@ int main(int argc, char *argv[])
         auto consume = [&](const WorkloadItem &item, Stats &stats) {
             switch (item.type)
             {
-            case Ops::Insert:
-                root->map->Put(pop, stats, item.key, item.key);
-                break;
-            case Ops::Read:
-                root->map->Get(item.key);
-                break;
-            case Ops::Update:
-                root->map->Put(pop, stats, item.key, item.key);
-                break;
-            case Ops::Delete:
-                root->map->Remove(pop, item.key);
-                break;
-            default:
-                break;
+                case Ops::Insert:
+                    root->map->Put(pop, stats, item.key, item.key);
+                    break;
+                case Ops::Read:
+                    root->map->Get(item.key);
+                    break;
+                case Ops::Update:
+                    root->map->Put(pop, stats, item.key, item.key);
+                    break;
+                case Ops::Delete:
+                    root->map->Remove(pop, item.key);
+                    break;
+                default:
+                    break;
             }
         };
 
@@ -241,14 +269,14 @@ int main(int argc, char *argv[])
         for (auto i = 0; i < threads; i++)
         {
             workers[i] = std::thread(bench_thread,
-                                     consume,
-                                     std::ref(statses[i]),
-                                     std::ref(workloads[i]),
-                                     std::ref(throughputs[i]),
-                                     std::ref(latencies[i]),
-                                     std::ref(p90s[i]),
-                                     std::ref(p99s[i]),
-                                     std::ref(p999s[i]));
+                    consume,
+                    std::ref(statses[i]),
+                    std::ref(workloads[i]),
+                    std::ref(throughputs[i]),
+                    std::ref(latencies[i]),
+                    std::ref(p90s[i]),
+                    std::ref(p99s[i]),
+                    std::ref(p999s[i]));
         }
 
         for (auto &t : workers)
@@ -347,6 +375,7 @@ int main(int argc, char *argv[])
             }
             std::cout << "\n";
         }
+        to_stop = true;
 #ifdef VALIATION
         bool pass = true;
         long i = 0;

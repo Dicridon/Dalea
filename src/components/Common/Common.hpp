@@ -13,6 +13,7 @@
 
 // #define LOGGING
 // #define DEBUG
+// #define USE_FP
 
 namespace Dalea
 {

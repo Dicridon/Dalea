@@ -46,6 +46,8 @@ namespace Dalea
         void Log(std::string &msg) const;
         void Log(std::stringstream &msg_s) const;
 
+        mutable SegmentPtrQueue segment_pool;
+
     private:
         uint8_t depth;
         bool doubling;
@@ -58,7 +60,6 @@ namespace Dalea
         std::atomic_int readers;
         std::shared_mutex doubling_lock;
         mutable Logger logger;
-        mutable SegmentPtrQueue segment_pool;
 
         void split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
         void simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept;

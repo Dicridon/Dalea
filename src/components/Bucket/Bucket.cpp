@@ -26,13 +26,20 @@ namespace Dalea
             //     // no need to persist
             //     fingerprints[search].Invalidate();
             // }
+#ifdef USE_FP
             if (fingerprints[search] == hash_value)
             {
                 if (pairs[search]->key == key)
+#else
+                if (pairs[search] && pairs[search]->key == key)
+#endif
+
                 {
                     return pairs[search];
                 }
+#ifdef USE_FP
             }
+#endif
         }
 
         return nullptr;
@@ -66,9 +73,13 @@ namespace Dalea
             {
                 slot = search;
             }
+#ifdef USE_FP
             if (fingerprints[search] == hash_value)
             {
                 if (pairs[search]->key == key)
+#else
+                if (pairs[search] && pairs[search]->key == key)
+#endif
                 {
                     // Not a good update strategy
                     // TX::manual tx(pop);
@@ -76,7 +87,9 @@ namespace Dalea
                     // TX::commit();
                     return FunctionStatus::Ok;
                 }
+#ifdef USE_FP
             }
+#endif
         }
         if (slot == -1)
         {
