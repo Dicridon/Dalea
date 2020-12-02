@@ -94,7 +94,7 @@ namespace Dalea
 #endif
     }
 
-    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
+    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, KVPairPtr pair, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
 
@@ -147,9 +147,9 @@ namespace Dalea
             goto RETRY;
         }
 #ifdef LOGGING
-        auto ret = bkt->Put(logger, pop, key, value, hv, seg->segment_no);
+        auto ret = bkt->Put(logger, pop, pair, key, value, hv, seg->segment_no);
 #else
-        auto ret = bkt->Put(pop, key, value, hv, seg->segment_no);
+        auto ret = bkt->Put(pop, pair, key, value, hv, seg->segment_no);
 #endif
         switch (ret)
         {

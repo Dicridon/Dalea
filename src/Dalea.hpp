@@ -35,7 +35,7 @@ namespace Dalea
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
 
-        FunctionStatus Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept;
+        FunctionStatus Put(PoolBase &pop, Stats &stats, KVPairPtr pair, const std::string &key, const std::string &value) noexcept;
         KVPairPtr Get(const std::string &key) const noexcept;
         FunctionStatus Remove(PoolBase &pop, const std::string &key) noexcept;
         uint64_t Capacity() const noexcept;

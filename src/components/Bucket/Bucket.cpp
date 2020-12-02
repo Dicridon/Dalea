@@ -28,7 +28,7 @@ namespace Dalea
             // }
             if (fingerprints[search] == hash_value)
             {
-                if (pairs[search]->key == key)
+                if (pairs[search]->first == key)
                 {
                     return pairs[search];
                 }
@@ -38,7 +38,7 @@ namespace Dalea
         return nullptr;
     }
 
-    FunctionStatus Bucket::Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
+    FunctionStatus Bucket::Put(PoolBase &pop, KVPairPtr pair, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
     {
         // if (HasAncestor())
         // {
@@ -68,11 +68,11 @@ namespace Dalea
             }
             if (fingerprints[search] == hash_value)
             {
-                if (pairs[search]->key == key)
+                if (pairs[search]->first == key)
                 {
                     // Not a good update strategy
                     // TX::manual tx(pop);
-                    pairs[search]->value = value;
+                    pairs[search]->second = value;
                     // TX::commit();
                     return FunctionStatus::Ok;
                 }
@@ -82,12 +82,6 @@ namespace Dalea
         {
             return FunctionStatus::SplitRequired;
         }
-        KVPairPtr pair = nullptr;
-        TX::run(pop, [&]() {
-            pair = pmem::obj::make_persistent<KVPair>(
-                key,
-                value);
-        });
         pairs[slot] = pair;
         fingerprints[slot] = hash_value;
         pmemobj_persist(pop.handle(), pairs + slot, sizeof(KVPair));
@@ -95,7 +89,7 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
-    FunctionStatus Bucket::Put(Logger &logger, PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
+    FunctionStatus Bucket::Put(Logger &logger, PoolBase &pop, KVPairPtr pair, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept
     {
         if (HasAncestor())
         {
@@ -130,10 +124,10 @@ namespace Dalea
             }
             if (fingerprints[search] == hash_value)
             {
-                if (pairs[search]->key == key)
+                if (pairs[search]->first == key)
                 {
                     TX::manual tx(pop);
-                    pairs[search]->value = value;
+                    pairs[search]->second = value;
                     TX::commit();
                     return FunctionStatus::Ok;
                 }
@@ -143,13 +137,11 @@ namespace Dalea
         {
             return FunctionStatus::SplitRequired;
         }
-        TX::run(pop, [&]() {
-            auto pair = pmem::obj::make_persistent<KVPair>(
-                key,
-                value);
-            pairs[slot] = pair;
-            fingerprints[slot] = hash_value;
-        });
+        pairs[slot] = pair;
+        fingerprints[slot] = hash_value;
+        pmemobj_persist(pop.handle(), pairs + slot, sizeof(KVPair));
+        pmemobj_persist(pop.handle(), fingerprints + slot, sizeof(uint64_t));
+ 
 #ifdef LOGGING
         std::string msg{">>>> putting finished\n"};
         logger.Write(msg);
@@ -362,7 +354,7 @@ namespace Dalea
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
             if (kvp != nullptr)
             {
-                std::cout << "       >> " << kvp->key.c_str() << "\n";
+                std::cout << "       >> " << kvp->first << "\n";
             }
         });
 
@@ -380,7 +372,7 @@ namespace Dalea
         std::for_each(std::begin(pairs), std::end(pairs), [&](const KVPairPtr &kvp) {
             if (kvp != nullptr)
             {
-                strm << "       >> " << kvp->key.c_str() << "\n";
+                strm << "       >> " << kvp->first << "\n";
             }
         });
 

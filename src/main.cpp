@@ -38,9 +38,9 @@ enum class Ops
 struct WorkloadItem
 {
     Ops type;
-    std::string key;
+    KVPairPtr pair;
 
-    WorkloadItem(const Ops &t, const std::string &k) : type(t), key(k){};
+    WorkloadItem(const Ops &t, KVPairPtr p) : type(t), pair(p){};
 };
 
 static std::string new_string(uint64_t i)
@@ -176,10 +176,10 @@ int main(int argc, char *argv[])
 
         std::cout << "warming up\n";
         Stats _unused;
-        while(getline(warmup, buffer))
+        while (getline(warmup, buffer))
         {
             std::string key = buffer.c_str() + PUT.length();
-            root->map->Put(pop, _unused, key, key);
+            root->map->Put(pop, _unused, new KVPair(key, key), key, key);
         }
         auto count = 0;
         auto load = 0;
@@ -214,23 +214,23 @@ int main(int argc, char *argv[])
                 std::cout << "unknown operation: " << buffer << "\n";
                 return -1;
             }
-            workloads[(count++) % threads].push_back(WorkloadItem(type, key));
+            workloads[(count++) % threads].push_back(WorkloadItem(type, new KVPair(key, key)));
         }
 
         auto consume = [&](const WorkloadItem &item, Stats &stats) {
             switch (item.type)
             {
             case Ops::Insert:
-                root->map->Put(pop, stats, item.key, item.key);
+                root->map->Put(pop, stats, item.pair, item.pair->first, item.pair->second);
                 break;
             case Ops::Read:
-                root->map->Get(item.key);
+                root->map->Get(item.pair->first);
                 break;
             case Ops::Update:
-                root->map->Put(pop, stats, item.key, item.key);
+                root->map->Put(pop, stats, item.pair, item.pair->first, item.pair->second);
                 break;
             case Ops::Delete:
-                root->map->Remove(pop, item.key);
+                root->map->Remove(pop, item.pair->first);
                 break;
             default:
                 break;
@@ -363,11 +363,11 @@ int main(int argc, char *argv[])
                 root->map->Log(buf);
                 pass = false;
             }
-            else if (ptr->value != value)
+            else if (ptr->second != value)
             {
                 buf << "wrong value for key " << key << "\n";
                 buf << "expecting " << value << "\n";
-                buf << "got " << ptr->value.c_str() << "\n";
+                buf << "got " << ptr->second << "\n";
                 std::cout << buf.str();
                 root->map->Log(buf);
                 pass = false;
