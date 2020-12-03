@@ -8,6 +8,8 @@
 #include <chrono>
 #include <sstream>
 #include <thread>
+#include <libpmemobj++/container/concurrent_hash_map.hpp>
+#include <libpmemobj++/container/vector.hpp>
 namespace Dalea
 {
     using namespace std::chrono_literals;
@@ -27,15 +29,25 @@ namespace Dalea
         int size;
     };
 
+    struct HashPair
+    {
+        KVPairPtr kv;
+        HashValue hv;
+        HashPair(const KVPairPtr &_kv, const HashValue &_hv) : kv(_kv), hv(_hv) {};
+        HashPair(const HashPair &) = default;
+        HashPair(HashPair &&) = default;
+        HashPair &operator=(const HashPair &rhs) = default;
+    };
+
     class HashTable
     {
     public:
-        HashTable(PoolBase &pop);
+        HashTable(PoolBase &pop, int thread_num);
         HashTable() = delete;
         HashTable(const HashTable &) = delete;
         HashTable(HashTable &&) = delete;
 
-        FunctionStatus Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept;
+        FunctionStatus Put(PoolBase &pop, Stats &stats, int thread_id, const std::string &key, const std::string &value) noexcept;
         KVPairPtr Get(const std::string &key) const noexcept;
         FunctionStatus Remove(PoolBase &pop, const std::string &key) noexcept;
         uint64_t Capacity() const noexcept;
@@ -47,6 +59,7 @@ namespace Dalea
         void Log(std::stringstream &msg_s) const;
 
         mutable SegmentPtrQueue segment_pool;
+        mutable pobj::concurrent_hash_map<std::string, HashPair> stash;
 
     private:
         uint8_t depth;
@@ -60,6 +73,8 @@ namespace Dalea
         std::atomic_int readers;
         std::shared_mutex doubling_lock;
         mutable Logger logger;
+        pobj::vector<int> stash_limits;
+
 
         void split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, SegmentPtr &seg, uint64_t segno) noexcept;
         void simple_split(PoolBase &pop, Stats &stats, uint64_t root_segno, uint64_t buddy_segno, Bucket &bkt, uint64_t bktbits) noexcept;

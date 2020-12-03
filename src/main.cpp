@@ -56,16 +56,17 @@ auto prepare_pool(std::string &file, size_t size)
     return pop;
 }
 
-auto prepare_root(pobj::pool<DaleaRoot> &pop)
+auto prepare_root(pobj::pool<DaleaRoot> &pop, int thread_num)
 {
     auto r = pop.root();
     TX::run(pop, [&]() {
-        r->map = pobj::make_persistent<HashTable>(pop);
+        r->map = pobj::make_persistent<HashTable>(pop, thread_num);
     });
     return r;
 }
 
-void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
+void bench_thread(std::function<void(const WorkloadItem &, Stats &, int)> func,
+                  int tid,
                   std::vector<Stats> &stats,
                   std::vector<WorkloadItem> &workload,
                   std::vector<double> &throughput,
@@ -87,7 +88,7 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
     {
         lat_start = std::chrono::steady_clock::now();
 
-        func(i, st);
+        func(i, st, tid);
 
         lat_end = std::chrono::steady_clock::now();
         time_elapsed += (lat_end - lat_start).count();
@@ -133,10 +134,9 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
     }
 }
 
-
 int main(int argc, char *argv[])
 {
-    
+
     Dalea::CmdParser parser;
     if (argc < 4 || !parser.buildCmdParser(argc, argv))
     {
@@ -158,12 +158,13 @@ int main(int argc, char *argv[])
     std::cout << "   batch size is " << batch << "\n";
 
     auto pop = prepare_pool(pool_file, 10240);
-    auto root = prepare_root(pop);
+    auto root = prepare_root(pop, threads);
 
     using namespace std::chrono_literals;
     bool to_stop = false;
     auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
-        while(!to_stop) {
+        while (!to_stop)
+        {
             while (queue.HasSpace())
             {
                 // std::cout << "[[[[[[[[[[[[[[[[[[[[ refilling\n";
@@ -174,7 +175,6 @@ int main(int argc, char *argv[])
             }
         }
     };
-
 
     std::thread(guardian, std::ref(pop), std::ref(root->map->segment_pool)).detach();
     std::thread(guardian, std::ref(pop), std::ref(root->map->segment_pool)).detach();
@@ -198,10 +198,10 @@ int main(int argc, char *argv[])
         std::cout << "warming up\n";
         Stats _unused;
         auto load_count = 0;
-        while(getline(warmup, buffer))
+        while (getline(warmup, buffer))
         {
             std::string key = buffer.c_str() + PUT.length();
-            root->map->Put(pop, _unused, key, key);
+            root->map->Put(pop, _unused, 0, key, key);
             ++load_count;
             // if (load_count % 160000 == 0)
             // {
@@ -245,23 +245,23 @@ int main(int argc, char *argv[])
             workloads[(count++) % threads].push_back(WorkloadItem(type, key));
         }
 
-        auto consume = [&](const WorkloadItem &item, Stats &stats) {
+        auto consume = [&](const WorkloadItem &item, Stats &stats, int tid) {
             switch (item.type)
             {
-                case Ops::Insert:
-                    root->map->Put(pop, stats, item.key, item.key);
-                    break;
-                case Ops::Read:
-                    root->map->Get(item.key);
-                    break;
-                case Ops::Update:
-                    root->map->Put(pop, stats, item.key, item.key);
-                    break;
-                case Ops::Delete:
-                    root->map->Remove(pop, item.key);
-                    break;
-                default:
-                    break;
+            case Ops::Insert:
+                root->map->Put(pop, stats, tid, item.key, item.key);
+                break;
+            case Ops::Read:
+                root->map->Get(item.key);
+                break;
+            case Ops::Update:
+                root->map->Put(pop, stats, tid, item.key, item.key);
+                break;
+            case Ops::Delete:
+                root->map->Remove(pop, item.key);
+                break;
+            default:
+                break;
             }
         };
 
@@ -269,16 +269,16 @@ int main(int argc, char *argv[])
         for (auto i = 0; i < threads; i++)
         {
             workers[i] = std::thread(bench_thread,
-                    consume,
-                    std::ref(statses[i]),
-                    std::ref(workloads[i]),
-                    std::ref(throughputs[i]),
-                    std::ref(latencies[i]),
-                    std::ref(p90s[i]),
-                    std::ref(p99s[i]),
-                    std::ref(p999s[i]));
+                                     consume,
+                                     i,
+                                     std::ref(statses[i]),
+                                     std::ref(workloads[i]),
+                                     std::ref(throughputs[i]),
+                                     std::ref(latencies[i]),
+                                     std::ref(p90s[i]),
+                                     std::ref(p99s[i]),
+                                     std::ref(p999s[i]));
         }
-
         for (auto &t : workers)
         {
             t.join();

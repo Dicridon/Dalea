@@ -59,7 +59,7 @@ namespace Dalea
         return size != capacity;
     }
 
-    HashTable::HashTable(PoolBase &pop)
+    HashTable::HashTable(PoolBase &pop, int thread_num)
         : dir(pop),
           depth(1),
           to_double(false),
@@ -69,6 +69,11 @@ namespace Dalea
           segment_pool(pop, 16396)
     {
         std::cout << "segment pool is at " << &segment_pool << "\n";
+        stash_limits.reserve(thread_num);
+        for (int i = 0; i < thread_num; i++)
+        {
+            stash_limits.push_back(0);
+        }
 #ifdef PREALLOCATION
         TX::run(pop, [&]() {
             for (int i = 0; i < 16396; i++)
@@ -81,7 +86,7 @@ namespace Dalea
 #endif
     }
 
-    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, const std::string &key, const std::string &value) noexcept
+    FunctionStatus HashTable::Put(PoolBase &pop, Stats &stats, int thread_id, const std::string &key, const std::string &value) noexcept
     {
         auto hv = HashValue(std::hash<std::string>{}(key));
 
@@ -91,7 +96,20 @@ namespace Dalea
         // directory doubling concurrency control
         if (to_double)
         {
-            goto RETRY;
+            if (stash_limits[thread_id] < STASH_LIMIT)
+            {
+                KVPairPtr ptr = nullptr;
+                TX::run(pop, [&]() {
+                    ptr = pobj::make_persistent<KVPair>(key, value);
+                });
+                HashPair p(ptr, hv);
+                stash.insert({key, p});
+                stash_limits[thread_id]++;
+            }
+            else
+            {
+                goto RETRY;
+            }
         }
 
         //reader_lock.lock_shared();
@@ -213,7 +231,20 @@ namespace Dalea
 #ifdef LOGGING
         logger.Write(log_buf.str());
 #endif
-        return bkt->Get(key, hv);
+        auto ret = bkt->Get(key, hv);
+        if (ret)
+        {
+            return ret;
+        }
+        else
+        {
+            pobj::concurrent_hash_map<std::string, HashPair>::accessor a;
+            if (stash.find(a, key))
+            {
+                return a->second.kv;
+            }
+        }
+        return nullptr;
     }
 
     FunctionStatus HashTable::Remove(PoolBase &pop, const std::string &key) noexcept
@@ -510,7 +541,7 @@ namespace Dalea
      * it decides whether to allocate or not, if allocating, then a traditional split is done
      * if not, a simple split is enough.
      */
-    void HashTable::traditional_split(PoolBase &pop, Stats &stats,  Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
+    void HashTable::traditional_split(PoolBase &pop, Stats &stats, Bucket &bkt, const HashValue &hv, uint64_t segno, bool helper) noexcept
     {
 #ifdef LOGGING
         Log("entering traditional_split\n");
