@@ -9,7 +9,7 @@
         Log(std::to_string(__LINE__) + "\n"); \
     }
 // #define TIMING
-// #define PREALLOCATION
+#define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -66,7 +66,7 @@ namespace Dalea
           readers(0),
           logger(std::string("./dalea.log")),
           capacity(2 * SEG_SIZE * BUCKET_SIZE),
-          segment_pool(pop, 16396)
+          segment_pool(pop, 4096 * 8)
     {
         std::cout << "segment pool is at " << &segment_pool << "\n";
         stash_limits.reserve(thread_num);
@@ -76,7 +76,7 @@ namespace Dalea
         }
 #ifdef PREALLOCATION
         TX::run(pop, [&]() {
-            for (int i = 0; i < 16396; i++)
+            for (int i = 0; i < 4096 * 8; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr);
@@ -96,20 +96,20 @@ namespace Dalea
         // directory doubling concurrency control
         if (to_double)
         {
-            if (stash_limits[thread_id] < STASH_LIMIT)
-            {
-                KVPairPtr ptr = nullptr;
-                TX::run(pop, [&]() {
-                    ptr = pobj::make_persistent<KVPair>(key, value);
-                });
-                HashPair p(ptr, hv);
-                stash.insert({key, p});
-                stash_limits[thread_id]++;
-            }
-            else
-            {
+            // if (stash_limits[thread_id] < STASH_LIMIT)
+            // {
+            //     KVPairPtr ptr = nullptr;
+            //     TX::run(pop, [&]() {
+            //         ptr = pobj::make_persistent<KVPair>(key, value);
+            //     });
+            //     HashPair p(ptr, hv);
+            //     stash.insert({key, p});
+            //     stash_limits[thread_id]++;
+            // }
+            // else
+            // {
                 goto RETRY;
-            }
+            // }
         }
 
         //reader_lock.lock_shared();
@@ -231,20 +231,20 @@ namespace Dalea
 #ifdef LOGGING
         logger.Write(log_buf.str());
 #endif
-        auto ret = bkt->Get(key, hv);
-        if (ret)
-        {
-            return ret;
-        }
-        else
-        {
-            pobj::concurrent_hash_map<std::string, HashPair>::accessor a;
-            if (stash.find(a, key))
-            {
-                return a->second.kv;
-            }
-        }
-        return nullptr;
+        return bkt->Get(key, hv);
+        // if (ret)
+        // {
+        //     return ret;
+        // }
+        // else
+        // {
+        //     pobj::concurrent_hash_map<std::string, HashPair>::accessor a;
+        //     if (stash.find(a, key))
+        //     {
+        //         return a->second.kv;
+        //     }
+        // }
+        // return nullptr;
     }
 
     FunctionStatus HashTable::Remove(PoolBase &pop, const std::string &key) noexcept

@@ -13,7 +13,7 @@
 
 // #define LOGGING
 // #define DEBUG
-// #define USE_FP
+#define USE_FP
 
 namespace Dalea
 {
@@ -39,7 +39,7 @@ namespace Dalea
     constexpr int BUCKET_BITS = 10;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
     constexpr int SUBDIR_SIZE = (1 << 16);
-    constexpr int METADIR_SIZE = (1 << 16);
+    constexpr int METADIR_SIZE = (1 << 4);
     constexpr int STASH_LIMIT = 128;
 #else
     constexpr int BUCKET_SIZE = 2;
