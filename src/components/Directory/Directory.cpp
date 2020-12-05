@@ -16,13 +16,14 @@ namespace Dalea
     Directory::SubDirectory::SubDirectory(PoolBase &pop)
     {
         TX::run(pop, [&]() {
-            segments[0] = pobj::make_persistent<Segment>(pop, 1, 0, false).get();
-            segments[1] = pobj::make_persistent<Segment>(pop, 1, 1, false).get();
-            pop.persist(segments[0], sizeof(Segment));
-            pop.persist(segments[1], sizeof(Segment));
+            for (int i = 0; i < (1 << INIT_DEPTH); i++)
+            {
+                segments[i] = pobj::make_persistent<Segment>(pop, 6, i, false).get();
+                pop.persist(segments[i], sizeof(Segment));
+            }
         });
 
-        for (int i = 2; i < SUBDIR_SIZE; i++)
+        for (int i = (1 << INIT_DEPTH); i < SUBDIR_SIZE; i++)
         {
             segments[i] = nullptr;
         }

@@ -28,14 +28,36 @@ namespace Dalea
         FunctionStatus Put(Logger &logger, PoolBase &pop, KVPairPtr pair, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept;
         FunctionStatus Remove(const String &key, const HashValue &hash_value, std::shared_mutex &mux) const noexcept;
 
-        void Lock() noexcept;
-        bool TryLock() noexcept;
-        void Unlock() noexcept;
-        void LockShared() noexcept;
-        bool TryLockShared() noexcept;
-        void UnlockShared() noexcept;
+        void Lock() noexcept
+        {
+            mux->lock();
+        }
+        bool TryLock() noexcept 
+        {
+            return mux->try_lock();
+        }
+        void Unlock() noexcept
+        {
+            mux->unlock();
+        }
+        void LockShared() noexcept
+        {
+            mux->lock_shared();
+        }
+        bool TryLockShared() noexcept
+        {
+            return mux->try_lock_shared();
+        }
+        void UnlockShared() noexcept
+        {
+            mux->unlock_shared();
+        }
 
-        bool HasAncestor() const noexcept;
+        bool HasAncestor() const noexcept
+        {
+            return metainfo.has_ancestor;
+        }
+
         void SetAncestor(int64_t an) noexcept;
         void SetAncestorPersist(PoolBase &pop, int64_t an) noexcept;
         std::optional<uint64_t> GetAncestor() const noexcept;

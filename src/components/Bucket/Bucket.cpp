@@ -154,41 +154,6 @@ namespace Dalea
         return FunctionStatus::Ok;
     }
 
-    void Bucket::Lock() noexcept
-    {
-        mux->lock();
-    }
-
-    bool Bucket::TryLock() noexcept
-    {
-        return mux->try_lock();
-    }
-
-    void Bucket::Unlock() noexcept
-    {
-        mux->unlock();
-    }
-
-    void Bucket::LockShared() noexcept
-    {
-        mux->lock_shared();
-    }
-
-    bool Bucket::TryLockShared() noexcept
-    {
-        return mux->try_lock_shared();
-    }
-
-    void Bucket::UnlockShared() noexcept
-    {
-        return mux->unlock_shared();
-    }
-
-    bool Bucket::HasAncestor() const noexcept
-    {
-        return metainfo.has_ancestor;
-    }
-
     void Bucket::SetAncestor(int64_t an) noexcept
     {
         metainfo.has_ancestor = 1;

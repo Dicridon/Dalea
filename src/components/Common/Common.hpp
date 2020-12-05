@@ -35,10 +35,11 @@ namespace Dalea
 #ifndef DEBUG
     constexpr int BUCKET_SIZE = 16;
     constexpr int META_BITS = 16;
-    constexpr int BUCKET_BITS = 10;
+    constexpr int BUCKET_BITS = 8;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
     constexpr int SUBDIR_SIZE = (1 << 16);
     constexpr int METADIR_SIZE = (1 << 16);
+    constexpr int INIT_DEPTH = 6;
 #else
     constexpr int BUCKET_SIZE = 2;
     constexpr int META_BITS = 16;
@@ -59,13 +60,32 @@ namespace Dalea
         HashValue &operator=(const HashValue &h) = default;
         ~HashValue() = default;
 
-        uint64_t SegmentBits(uint64_t depth) const noexcept;
-        uint64_t BucketBits() const noexcept;
-        uint64_t GetRaw() const noexcept;
-        bool IsInvalid() const noexcept;
-        void Invalidate() noexcept;
+        uint64_t SegmentBits(uint64_t depth) const noexcept
+        {
+            uint64_t mask = (1ULL << depth) - 1;
+            return hash_value & mask;
+        }
+        uint64_t BucketBits() const noexcept
+        {
+            return (hash_value << META_BITS) >> (64 - BUCKET_BITS);
+        }
+        uint64_t GetRaw() const noexcept
+        {
+            return hash_value;
+        }
+        bool IsInvalid() const noexcept
+        {
+            return hash_value == 0;
+        }
+        void Invalidate() noexcept
+        {
+            hash_value = 0;
+        }
 
-        bool operator==(const HashValue &h) const noexcept;
+        bool operator==(const HashValue &h) const noexcept
+        {
+            return hash_value == h.hash_value;
+        }
     };
 } // namespace Dalea
 #endif

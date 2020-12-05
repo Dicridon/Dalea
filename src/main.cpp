@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
         auto duration = (end - start).count();
         std::cout << "time elapsed is " << duration << "\n";
         std::cout << "throughput is " << double(load) / duration * 1000000000.0 << "\n";
-
+#if 0
         std::cout << "\nreporting throughput by thread:\n";
         for (auto i = 0; i < threads; i++)
         {
@@ -382,6 +382,7 @@ int main(int argc, char *argv[])
             std::cout << "check failed\n";
             root->map->DebugToLog();
         }
+#endif
 #endif
     }
 }
