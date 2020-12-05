@@ -473,6 +473,7 @@ namespace Dalea
                 else
                 {
                     pre_seg->segment_no = walk;
+                    pmemobj_persist(pop.handle(), &pre_seg, sizeof(pre_seg->segment_no));
                 }
 #endif
 #ifdef LOGGING
@@ -484,7 +485,7 @@ namespace Dalea
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
                     auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor().value() : walk_ptr->segment_no.get_ro();
-                    pre_seg->buckets[i].SetAncestor(ans);
+                    pre_seg->buckets[i].SetAncestorPersist(pop, ans);
 #ifdef LOGGING
                     if (walk_ptr->buckets[i].HasAncestor())
                     {
@@ -501,7 +502,7 @@ namespace Dalea
                     }
 #endif
                 }
-                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor().value() : buddy_segno);
+                pre_seg->buckets[bktbits].SetAncestorPersist(pop, buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor().value() : buddy_segno);
                 TX::run(pop, [&]() {
                     dir.AddSegment(pop, pre_seg, walk);
                 });
@@ -696,6 +697,7 @@ namespace Dalea
         else
         {
             buddy->segment_no = buddy_segno;
+            pmemobj::persist(pop.handle(), &buddy->segment_no, sizeof(buddy->segment_no));
         }
 #endif
 #ifdef TIMING
@@ -710,7 +712,7 @@ namespace Dalea
             if (root->buckets[i].HasAncestor())
             {
                 // avoid chaining
-                buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor().value());
+                buddy->buckets[i].SetAncestorPersist(pop, root->buckets[i].GetAncestor().value());
 #ifdef LOGGING
                 log << "(" << root->segment_no.get_ro() << ", " << i << ") has ancestor "
                     << root->buckets[i].GetAncestor().value() << "\n";
@@ -719,7 +721,7 @@ namespace Dalea
             }
             else
             {
-                buddy->buckets[i].SetAncestor(segno);
+                buddy->buckets[i].SetAncestorPersist(pop, segno);
 #ifdef LOGGING
                 log << "(" << root->segment_no.get_ro() << ", " << i << ") has no ancestor "
                     << "connecting to " << segno << "\n";

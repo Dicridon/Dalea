@@ -103,9 +103,9 @@ namespace Dalea
         {
             TX::run(pop, [&]() {
                 meta.subdirectories[sub] = pobj::make_persistent<SubDirectory>(pop);
+                meta.subdirectories[sub]->segments[seg] = ptr;
             });
         }
-        meta.subdirectories[sub]->segments[seg] = ptr;
         return true;
     }
 
@@ -153,6 +153,7 @@ namespace Dalea
             auto sub = i / SUBDIR_SIZE;
             auto seg = i % SUBDIR_SIZE;
             meta.subdirectories[sub]->segments[seg] = meta.subdirectories[buddy_sub]->segments[buddy_seg];
+            pmemobj_persist(pop.handle(), &meta.subdirectories[sub]->segments[seg], sizeof(SegmentPtr));
         }
     }
 } // namespace Dalea
