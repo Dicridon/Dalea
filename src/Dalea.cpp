@@ -66,11 +66,11 @@ namespace Dalea
           readers(0),
           logger(std::string("./dalea.log")),
           capacity(2 * SEG_SIZE * BUCKET_SIZE),
-          segment_pool(pop, 4096 * 15)
+          segment_pool(pop, 4096 * 24)
     {
 #ifdef PREALLOCATION
         TX::run(pop, [&]() {
-            for (int i = 0; i < 4096 * 15; i++)
+            for (int i = 0; i < 4096 * 24; i++)
             {
                 auto ptr = pobj::make_persistent<Segment>(pop, 0, 0, false);
                 segment_pool.Push(ptr.get());

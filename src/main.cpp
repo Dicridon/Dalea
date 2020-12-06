@@ -22,6 +22,16 @@ const std::string GET = "READ";
 const std::string UPDATE = "UPDATE";
 const std::string DELETE = "DELETE";
 
+std::vector<int> numa0_cpus {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29};
+
+void cpu_bind(int cpu_id, std::thread::native_handle_type handle)
+{
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    pthread_setaffinity_np(handle, sizeof(cpu_set_t), &cpuset);
+}
+
 struct DaleaRoot
 {
     pobj::persistent_ptr<HashTable> map;
@@ -65,7 +75,8 @@ auto prepare_root(pobj::pool<DaleaRoot> &pop)
     return r;
 }
 
-void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
+void bench_thread(int thread_id,
+                  std::function<void(const WorkloadItem &, Stats &)> func,
                   std::vector<Stats> &stats,
                   std::vector<WorkloadItem> &workload,
                   std::vector<double> &throughput,
@@ -74,6 +85,7 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &)> func,
                   std::vector<double> &p99,
                   std::vector<double> &p999)
 {
+    std::cout << "thread " << thread_id << "running on " << sched_getcpu() << "\n";
     auto sampling_batch = 20000;
     auto counter = 0;
     std::priority_queue<double> tail;
@@ -241,6 +253,7 @@ int main(int argc, char *argv[])
         for (auto i = 0; i < threads; i++)
         {
             workers[i] = std::thread(bench_thread,
+                                     i,
                                      consume,
                                      std::ref(statses[i]),
                                      std::ref(workloads[i]),
@@ -249,6 +262,7 @@ int main(int argc, char *argv[])
                                      std::ref(p90s[i]),
                                      std::ref(p99s[i]),
                                      std::ref(p999s[i]));
+            cpu_bind(numa0_cpus[i], workers[i].native_handle());
         }
 
         for (auto &t : workers)
@@ -259,7 +273,6 @@ int main(int argc, char *argv[])
         auto duration = (end - start).count();
         std::cout << "time elapsed is " << duration << "\n";
         std::cout << "throughput is " << double(load) / duration * 1000000000.0 << "\n";
-#if 0
         std::cout << "\nreporting throughput by thread:\n";
         for (auto i = 0; i < threads; i++)
         {
@@ -382,7 +395,6 @@ int main(int argc, char *argv[])
             std::cout << "check failed\n";
             root->map->DebugToLog();
         }
-#endif
 #endif
     }
 }
