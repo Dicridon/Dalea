@@ -9,7 +9,7 @@
         Log(std::to_string(__LINE__) + "\n"); \
     }
 // #define TIMING
-#define PREALLOCATION
+// #define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -210,7 +210,10 @@ namespace Dalea
 
     KVPairPtr HashTable::Get(const std::string &key) const noexcept
     {
+        KVPairPtr ret = nullptr;
+
         auto hv = HashValue(std::hash<std::string>{}(key));
+RETRY:
         auto seg = dir.GetSegment(hv, depth);
         auto bkt = &seg->buckets[hv.BucketBits()];
 #ifdef LOGGING
@@ -231,20 +234,16 @@ namespace Dalea
 #ifdef LOGGING
         logger.Write(log_buf.str());
 #endif
-        return bkt->Get(key, hv);
-        // if (ret)
-        // {
-        //     return ret;
-        // }
-        // else
-        // {
-        //     pobj::concurrent_hash_map<std::string, HashPair>::accessor a;
-        //     if (stash.find(a, key))
-        //     {
-        //         return a->second.kv;
-        //     }
-        // }
-        // return nullptr;
+        switch (bkt->Get(key, hv, ret, seg->segment_no))
+        {
+            case FunctionStatus::Ok:
+                break;
+            case FunctionStatus::Retry:
+                goto RETRY;
+            default:
+                return nullptr;
+        }
+        return ret;
     }
 
     FunctionStatus HashTable::Remove(PoolBase &pop, const std::string &key) noexcept

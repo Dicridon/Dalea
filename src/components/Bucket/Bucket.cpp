@@ -14,11 +14,24 @@ namespace Dalea
         mux = new std::shared_mutex;
     }
 
-    KVPairPtr Bucket::Get(const String &key, const HashValue &hash_value) const noexcept
+    FunctionStatus Bucket::Get(const String &key, const HashValue &hash_value, KVPairPtr &ret, uint64_t segno) const noexcept
     {
         std::shared_lock s(*mux);
         // auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
-        for (auto search = 0; search < BUCKET_SIZE - 1; search+=2)
+        auto mask = ((1UL << GetDepth()) - 1);
+        auto encoding = hash_value.GetRaw() & mask; // (((1UL << GetDepth()) - 1));
+        auto tag = segno & mask;
+        /* 
+         * access to a splitting bucket and then obtained a lock, however the split has finished
+         * tag may have changed
+         */
+        if (tag != encoding)
+        {
+            return FunctionStatus::Retry;
+        }
+
+
+        for (auto search = 0; search < BUCKET_SIZE; search++)
         {
             // auto f = fingerprints[search].GetRaw() & (((1UL << GetDepth()) - 1));
             // if (f != encoding)
@@ -35,14 +48,16 @@ namespace Dalea
 #endif
 
                 {
-                    return pairs[search];
+                    // return pairs[search];
+                    ret = pairs[search];
+                    return FunctionStatus::Ok;
                 }
 #ifdef USE_FP
             }
 #endif
         }
 
-        return nullptr;
+        return FunctionStatus::Failed;
     }
 
     FunctionStatus Bucket::Put(PoolBase &pop, const String &key, const String &value, const HashValue &hash_value, uint64_t segno) noexcept

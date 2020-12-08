@@ -13,8 +13,6 @@
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
 
-#define DEBUG
-
 using namespace Dalea;
 
 const std::string PUT = "INSERT";
@@ -311,8 +309,10 @@ int main(int argc, char *argv[])
                 root->map->Put(pop, stats, tid, item.key, item.key);
                 break;
             case Ops::Read:
-                root->map->Get(item.key);
-                break;
+                {
+                    root->map->Get(item.key);
+                    break;
+                }
             case Ops::Update:
                 root->map->Put(pop, stats, tid, item.key, item.key);
                 break;
