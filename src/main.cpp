@@ -13,7 +13,7 @@
 #include "CmdParser.hpp"
 #include "Dalea.hpp"
 
-#define VALIATION
+#define DEBUG
 
 using namespace Dalea;
 
@@ -63,6 +63,63 @@ auto prepare_root(pobj::pool<DaleaRoot> &pop, int thread_num)
         r->map = pobj::make_persistent<HashTable>(pop, thread_num);
     });
     return r;
+}
+
+void debug(PoolBase &pop, pobj::persistent_ptr<DaleaRoot> &r, int batch, int num_threads)
+{
+    auto worker = [&](int id, int start, int end) {
+        Stats __unused;
+        for (int i = start; i < end; i++)
+        {
+            auto key = new_string(i);
+            r->map->Put(pop, __unused, id, key, key);
+        }
+    };
+    auto part = batch / num_threads;
+    std::thread workers[num_threads];
+    for (auto i = 0; i < num_threads; i++)
+    {
+        workers[i] = std::thread(worker, i, i * part, (i + 1) * part);
+    }
+
+    for (auto & t : workers)
+    {
+        t.join();
+    }
+    bool pass = true;
+    long i = 0;
+    for (; i < batch; i++)
+    {
+        auto key = new_string(i);
+        auto value = new_string(i);
+        auto ptr = r->map->Get(key);
+        std::stringstream buf;
+        if (ptr == nullptr)
+        {
+            buf << "missing value for key " << key << "\n";
+            std::cout << buf.str();
+            r->map->Log(buf);
+            pass = false;
+        }
+        else if (ptr->value != value)
+        {
+            buf << "wrong value for key " << key << "\n";
+            buf << "expecting " << value << "\n";
+            buf << "got " << ptr->value.c_str() << "\n";
+            std::cout << buf.str();
+            r->map->Log(buf);
+            pass = false;
+        }
+    }
+    if (pass)
+    {
+        std::cout << "check passed\n";
+    }
+    else
+    {
+        std::cout << "check failed\n";
+        r->map->DebugToLog();
+    }
 }
 
 void bench_thread(std::function<void(const WorkloadItem &, Stats &, int)> func,
@@ -136,7 +193,6 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &, int)> func,
 
 int main(int argc, char *argv[])
 {
-
     Dalea::CmdParser parser;
     if (argc < 4 || !parser.buildCmdParser(argc, argv))
     {
@@ -160,6 +216,9 @@ int main(int argc, char *argv[])
     auto pop = prepare_pool(pool_file, 10240);
     auto root = prepare_root(pop, threads);
 
+#ifdef DEBUG
+    debug(pop, root, batch, threads);
+#else
     using namespace std::chrono_literals;
     bool to_stop = false;
     auto guardian = [&](PoolBase &pop, SegmentPtrQueue &queue) {
@@ -376,41 +435,6 @@ int main(int argc, char *argv[])
             std::cout << "\n";
         }
         to_stop = true;
-#ifdef VALIATION
-        bool pass = true;
-        long i = 0;
-        for (; i < batch; i++)
-        {
-            auto key = new_string(i);
-            auto value = new_string(i);
-            auto ptr = root->map->Get(key);
-            std::stringstream buf;
-            if (ptr == nullptr)
-            {
-                buf << "missing value for key " << key << "\n";
-                std::cout << buf.str();
-                root->map->Log(buf);
-                pass = false;
-            }
-            else if (ptr->value != value)
-            {
-                buf << "wrong value for key " << key << "\n";
-                buf << "expecting " << value << "\n";
-                buf << "got " << ptr->value.c_str() << "\n";
-                std::cout << buf.str();
-                root->map->Log(buf);
-                pass = false;
-            }
-        }
-        if (pass)
-        {
-            std::cout << "check passed\n";
-        }
-        else
-        {
-            std::cout << "check failed\n";
-            root->map->DebugToLog();
-        }
-#endif
     }
+#endif
 }
