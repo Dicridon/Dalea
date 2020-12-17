@@ -91,16 +91,22 @@ namespace Dalea
 #ifdef USE_FP
             if (fingerprints[search] == hash_value)
             {
-                if (pairs[search]->key == key)
+                if (pairs[search]->key == key && pairs[search]->value != value)
 #else
                 if (pairs[search] && pairs[search]->key == key)
 #endif
                 {
+                    // std::cout << "dup key: " << key << "\n";
                     // Not a good update strategy
-                    // TX::manual tx(pop);
-                    pairs[search]->value = value;
-                    // TX::commit();
+                    TX::run(pop, [&]() {
+                        // replace_content would be called 
+                        pairs[search]->value = value;
+                    });
                     return FunctionStatus::Ok;
+                }
+                else
+                {
+                    return FunctionStatus::Failed;
                 }
 #ifdef USE_FP
             }

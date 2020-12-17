@@ -302,11 +302,14 @@ int main(int argc, char *argv[])
             workloads[(count++) % threads].push_back(WorkloadItem(type, key));
         }
 
+        std::atomic_int keys = 0;
+
         auto consume = [&](const WorkloadItem &item, Stats &stats, int tid) {
             switch (item.type)
             {
             case Ops::Insert:
-                root->map->Put(pop, stats, tid, item.key, item.key);
+                if (root->map->Put(pop, stats, tid, item.key, item.key) == FunctionStatus::Ok)
+                    keys++;
                 break;
             case Ops::Read:
                 {
@@ -346,6 +349,7 @@ int main(int argc, char *argv[])
         auto duration = (end - start).count();
         std::cout << "time elapsed is " << duration << "\n";
         std::cout << "throughput is " << double(load) / duration * 1000000000.0 << "\n";
+        std::cout << keys << " keys are inserted\n";
 
         std::cout << "\nreporting throughput by thread:\n";
         for (auto i = 0; i < threads; i++)
