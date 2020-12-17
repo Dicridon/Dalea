@@ -353,8 +353,10 @@ namespace Dalea
                 {
                     // buddy bucket is ensured to be empty
                     buddy.fingerprints[i] = fingerprints[i];
-                    fingerprints[i].Invalidate();
                     buddy.pairs[i] = pairs[i];
+                    pmemobj_persist(pop.handle(), buddy.pairs + i, sizeof(KVPairPtr));
+                    pmemobj_persist(pop.handle(), buddy.fingerprints + i, sizeof(HashValue));
+                    fingerprints[i].Invalidate();
                     pairs[i] = nullptr;
                 }
             }

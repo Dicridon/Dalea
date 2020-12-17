@@ -413,6 +413,18 @@ int main(int argc, char *argv[])
             std::cout << "\n";
         }
 
+        std::cout << "\nreporting simple split time by thread:\n";
+        for (auto i = 0; i < threads; i++)
+        {
+            std::cout << "thread " << i << ": ";
+            for (auto p : statses[i])
+            {
+                std::cout << p.simple_split_time << " ";
+            }
+            std::cout << "\n";
+        }
+
+
         std::cout << "\nreporting traditional split by thread:\n";
         for (auto i = 0; i < threads; i++)
         {

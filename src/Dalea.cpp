@@ -9,7 +9,7 @@
         Log(std::to_string(__LINE__) + "\n"); \
     }
 // #define TIMING
-// #define PREALLOCATION
+#define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -523,7 +523,7 @@ RETRY:
             walk_ptr->buckets[bktbits].SetAncestorPersist(pop, buddy_segno);
             walk_ptr->buckets[bktbits].Unlock();
             auto end = std::chrono::steady_clock::now();
-            stats.simple_split_time += (end - start).count();
+            stats.simple_split_time += (end - start).count() / 1000000.0;
         }
         /*
          * unlock buddy bucket here to prevent chaos: buddy bucket is filled up when
