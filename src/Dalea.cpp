@@ -9,7 +9,7 @@
         Log(std::to_string(__LINE__) + "\n"); \
     }
 // #define TIMING
-// #define PREALLOCATION
+#define PREALLOCATION
 namespace Dalea
 {
     SegmentPtrQueue::SegmentPtrQueue(PoolBase &pop, int init_cap) : capacity(init_cap), size(0)
@@ -440,6 +440,7 @@ RETRY:
         // dead lock is impossible
         // first step: kv migration
         buddy_bkt->Lock();
+        bkt.SetSplitPersist(pop);
         bkt.Migrate(pop, *buddy_bkt, root_segno);
         buddy_bkt->SetMetaPersist(pop, bkt.GetDepth(), 0, (1UL << 49));
 
@@ -573,6 +574,7 @@ RETRY:
         dir.UnlockSegment(buddy_segno);
 
         simple_split(pop, stats, root_segno, buddy_segno, bkt, bktbits);
+        bkt.ClearSplitPersist(pop);
 #ifdef LOGGING
         Log("leaving traditional_split\n");
 #endif
@@ -650,7 +652,7 @@ RETRY:
 #endif
         buddy->status = SegStatus::Quiescent;
         pmemobj_persist(pop.handle(), &buddy->status, sizeof(SegStatus));
-        bkt.ClearSplit();
+        bkt.ClearSplitPersist(pop);
         dir.UnlockSegment(buddy_segno);
 #ifdef TIMING
         auto end = std::chrono::steady_clock::now();
