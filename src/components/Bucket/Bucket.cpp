@@ -93,7 +93,7 @@ namespace Dalea
             {
                 if (pairs[search]->key == key && pairs[search]->value != value)
 #else
-                if (pairs[search] && pairs[search]->key == key)
+                if (pairs[search] && pairs[search]->key == key && pairs[search]->value != value)
 #endif
                 {
                     // std::cout << "dup key: " << key << "\n";
@@ -104,11 +104,11 @@ namespace Dalea
                     });
                     return FunctionStatus::Ok;
                 }
+#ifdef USE_FP
                 else
                 {
                     return FunctionStatus::Failed;
                 }
-#ifdef USE_FP
             }
 #endif
         }
@@ -353,10 +353,18 @@ namespace Dalea
         uint64_t mask = (1UL << GetDepth()) - 1;
         for (int i = 0; i < BUCKET_SIZE; i++)
         {
+#ifdef USE_FP
             if (!fingerprints[i].IsInvalid())
             {
                 if ((fingerprints[i].GetRaw() & mask) != encoding)
                 {
+#else
+            if (pairs[i]) 
+            {
+                auto hv = std::hash<std::string>{}(std::string(pairs[i]->key.c_str()));
+                if ((hv & mask) != encoding) 
+                {
+#endif
                     // buddy bucket is ensured to be empty
                     buddy.fingerprints[i] = fingerprints[i];
                     buddy.pairs[i] = pairs[i];
