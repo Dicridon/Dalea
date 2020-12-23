@@ -11,12 +11,18 @@ namespace Dalea
             fingerprints[i] = hv;
             pairs[i] = nullptr;
         }
+#ifndef PLOCK
         mux = new std::shared_mutex;
+#endif
     }
 
     FunctionStatus Bucket::Get(const String &key, const HashValue &hash_value, KVPairPtr &ret, uint64_t segno) const noexcept
     {
+#ifdef PLOCK
+        std::shared_lock s(mux);
+#else
         std::shared_lock s(*mux);
+#endif
         // auto encoding = hash_value.GetRaw() & (((1UL << GetDepth()) - 1));
         auto mask = ((1UL << GetDepth()) - 1);
         auto encoding = hash_value.GetRaw() & mask; // (((1UL << GetDepth()) - 1));
@@ -29,7 +35,6 @@ namespace Dalea
         {
             return FunctionStatus::Retry;
         }
-
 
         for (auto search = 0; search < BUCKET_SIZE; search++)
         {
@@ -44,7 +49,7 @@ namespace Dalea
             {
                 if (pairs[search]->key == key)
 #else
-                if (pairs[search] && pairs[search]->key == key)
+            if (pairs[search] && pairs[search]->key == key)
 #endif
 
                 {
@@ -93,13 +98,13 @@ namespace Dalea
             {
                 if (pairs[search]->key == key && pairs[search]->value != value)
 #else
-                if (pairs[search] && pairs[search]->key == key && pairs[search]->value != value)
+            if (pairs[search] && pairs[search]->key == key && pairs[search]->value != value)
 #endif
                 {
                     // std::cout << "dup key: " << key << "\n";
                     // Not a good update strategy
                     TX::run(pop, [&]() {
-                        // replace_content would be called 
+                        // replace_content would be called
                         pairs[search]->value = value;
                     });
                     return FunctionStatus::Ok;
@@ -134,7 +139,7 @@ namespace Dalea
         if (HasAncestor())
         {
             std::stringstream buf;
-            buf << "Ancestor detected " << GetAncestor().value() << " in (" << segno << ", " 
+            buf << "Ancestor detected " << GetAncestor().value() << " in (" << segno << ", "
                 << hash_value.BucketBits() << ")\n";
             logger.Write(buf.str());
             return FunctionStatus::FlattenRequired;
@@ -198,32 +203,56 @@ namespace Dalea
 
     void Bucket::Lock() noexcept
     {
+#ifdef PLOCK
+        mux.lock();
+#else
         mux->lock();
+#endif
     }
 
     bool Bucket::TryLock() noexcept
     {
+#ifdef PLOCK
+        return mux.try_lock();
+#else
         return mux->try_lock();
+#endif
     }
 
     void Bucket::Unlock() noexcept
     {
+#ifdef PLOCK
+        mux.unlock();
+#else
         mux->unlock();
+#endif
     }
 
     void Bucket::LockShared() noexcept
     {
+#ifdef PLOCK
+        mux.lock_shared();
+#else
         mux->lock_shared();
+#endif
     }
 
     bool Bucket::TryLockShared() noexcept
     {
+#ifdef PLOCK
+        return mux.try_lock_shared();
+#else
         return mux->try_lock_shared();
+#endif
     }
 
     void Bucket::UnlockShared() noexcept
     {
+#ifdef PLOCK
+        return mux.unlock_shared();
+#else
         return mux->unlock_shared();
+#endif
     }
 
     bool Bucket::HasAncestor() const noexcept
@@ -359,10 +388,10 @@ namespace Dalea
                 if ((fingerprints[i].GetRaw() & mask) != encoding)
                 {
 #else
-            if (pairs[i]) 
+            if (pairs[i])
             {
                 auto hv = std::hash<std::string>{}(std::string(pairs[i]->key.c_str()));
-                if ((hv & mask) != encoding) 
+                if ((hv & mask) != encoding)
                 {
 #endif
                     // buddy bucket is ensured to be empty

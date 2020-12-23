@@ -3,8 +3,8 @@
 #include "KVPair/KVPair.hpp"
 #include "Logger/Logger.hpp"
 
-#include <shared_mutex>
 #include <optional>
+#include <shared_mutex>
 namespace Dalea
 {
 
@@ -94,9 +94,13 @@ namespace Dalea
         BucketMeta metainfo;
         HashValue fingerprints[BUCKET_SIZE];
         KVPairPtr pairs[BUCKET_SIZE];
-        // the index of ancestor segment in directory
-        // int64_t padding;
+// the index of ancestor segment in directory
+// int64_t padding;
+#ifdef PLOCK
+        mutable pobj::shared_mutex mux;
+#else
         std::shared_mutex *mux;
+#endif
     };
 } // namespace Dalea
 #endif

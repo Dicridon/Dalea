@@ -26,7 +26,9 @@ namespace Dalea
         {
             segments[i] = nullptr;
         }
+#ifndef PLOCK
         mutexes = new std::shared_mutex[SUBDIR_SIZE];
+#endif
     }
 
     const SegmentPtr &Directory::GetSegment(uint64_t pos) const noexcept

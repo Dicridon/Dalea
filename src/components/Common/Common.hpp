@@ -4,6 +4,7 @@
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/transaction.hpp>
+#include <libpmemobj++/shared_mutex.hpp>
 
 #include <mutex>
 #include <shared_mutex>
@@ -14,6 +15,7 @@
 // #define LOGGING
 // #define DEBUG
 #define USE_FP
+#define PLOCK
 
 namespace Dalea
 {

@@ -18,7 +18,11 @@ namespace Dalea
             SubDirectory(SubDirectory &&) = delete;
 
             pobj::array<SegmentPtr, SUBDIR_SIZE> segments;
+#ifdef PLOCK
+            pobj::array<pobj::shared_mutex, SUBDIR_SIZE> mutexes;
+#else
             std::shared_mutex *mutexes;
+#endif
         };
 
         using SubDirectoryPtr = pobj::persistent_ptr<SubDirectory>;
@@ -51,7 +55,7 @@ namespace Dalea
         bool TryLockSegmentShared(uint64_t pos) noexcept;
         void UnlockSegment(uint64_t pos) noexcept;
         void UnlockSegmentShared(uint64_t pos) noexcept;
-        
+
         bool AddSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept;
         bool SetSegment(PoolBase &pop, const SegmentPtr &ptr, uint64_t pos) noexcept;
         bool Probe(uint64_t pos) const noexcept;
