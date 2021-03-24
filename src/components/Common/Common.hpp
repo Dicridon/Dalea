@@ -15,7 +15,7 @@
 // #define LOGGING
 // #define DEBUG
 #define USE_FP
-#define PLOCK
+// #define PLOCK
 
 namespace Dalea
 {
@@ -48,8 +48,8 @@ namespace Dalea
     constexpr int META_BITS = 16;
     constexpr int BUCKET_BITS = 1;
     constexpr int SEG_SIZE = (1 << Dalea::BUCKET_BITS);
-    constexpr int SUBDIR_SIZE = (1 << 16);
-    constexpr int METADIR_SIZE = (1 << 4);
+    constexpr int SUBDIR_SIZE = (1 << 4);
+    constexpr int METADIR_SIZE = (1 << 16);
 #endif
 
     struct HashValue

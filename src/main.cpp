@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
             }
             std::cout << "\n";
         }
-
+#ifdef SAMPLE_SPLIT
         std::cout << "\nreporting simple split by thread:\n";
         for (auto i = 0; i < threads; i++)
         {
@@ -451,6 +451,7 @@ int main(int argc, char *argv[])
             std::cout << "\n";
         }
         to_stop = true;
+#endif
     }
 #endif
 }
