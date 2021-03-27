@@ -175,8 +175,8 @@ void bench_thread(std::function<void(const WorkloadItem &, Stats &, int)> func,
                 tmp_p90 += tail.top();
                 tail.pop();
             }
-            p90.push_back(tmp_p90 / (sampling_batch * 0.1));
-            p99.push_back(tmp_p99 / (sampling_batch * 0.01));
+            // p90.push_back(tmp_p90 / (sampling_batch * 0.1));
+            // p99.push_back(tmp_p99 / (sampling_batch * 0.01));
             p999.push_back(tmp_p999 / (sampling_batch * 0.001));
             stats.push_back(st);
 
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
             }
             std::cout << "\n";
         }
-
+#if 0
         std::cout << "\nreporting p90 by thread:\n";
         for (auto i = 0; i < threads; i++)
         {
@@ -394,6 +394,7 @@ int main(int argc, char *argv[])
             }
             std::cout << "\n";
         }
+#endif
 
         std::cout << "\nreporting p999 by thread:\n";
         for (auto i = 0; i < threads; i++)

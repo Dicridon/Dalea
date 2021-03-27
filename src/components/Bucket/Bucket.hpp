@@ -38,7 +38,7 @@ namespace Dalea
         bool HasAncestor() const noexcept;
         void SetAncestor(int64_t an) noexcept;
         void SetAncestorPersist(PoolBase &pop, int64_t an) noexcept;
-        std::optional<uint64_t> GetAncestor() const noexcept;
+        uint64_t GetAncestor() const noexcept;
         void ClearAncestor() noexcept;
         void ClearAncestorPersist(PoolBase &pop) noexcept;
 

@@ -139,7 +139,7 @@ namespace Dalea
         if (HasAncestor())
         {
             std::stringstream buf;
-            buf << "Ancestor detected " << GetAncestor().value() << " in (" << segno << ", "
+            buf << "Ancestor detected " << GetAncestor() << " in (" << segno << ", "
                 << hash_value.BucketBits() << ")\n";
             logger.Write(buf.str());
             return FunctionStatus::FlattenRequired;
@@ -275,14 +275,10 @@ namespace Dalea
         pmemobj_persist(pop.handle(), &metainfo, sizeof(BucketMeta));
     }
 
-    std::optional<uint64_t> Bucket::GetAncestor() const noexcept
+    uint64_t Bucket::GetAncestor() const noexcept
     {
         auto tmp = metainfo;
-        if (!tmp.has_ancestor)
-        {
-            return {};
-        }
-        return {uint64_t(tmp.ancestor)};
+        return tmp.ancestor;
     }
 
     void Bucket::ClearAncestor() noexcept
@@ -441,7 +437,7 @@ namespace Dalea
 
         if (HasAncestor())
         {
-            std::cout << "          ancestor: " << GetAncestor().value() << "\n";
+            std::cout << "          ancestor: " << GetAncestor() << "\n";
         }
     }
 
@@ -459,7 +455,7 @@ namespace Dalea
 
         if (HasAncestor())
         {
-            strm << "          ancestor: " << GetAncestor().value() << "\n";
+            strm << "          ancestor: " << GetAncestor() << "\n";
         }
     }
 

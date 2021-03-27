@@ -127,10 +127,10 @@ namespace Dalea
                 << uint64_t(depth) << ", bucket depth: " << uint64_t(bkt->metainfo.local_depth) << "\n";
         Log(log_buf);
 #endif
-        auto ans = bkt->GetAncestor();
-        if (ans.has_value())
+        if (bkt->metainfo.has_ancestor)
         {
-            seg = dir.GetSegment(ans.value());
+            auto ans = bkt->GetAncestor();
+            seg = dir.GetSegment(ans);
             bkt = &seg->buckets[hv.BucketBits()];
 #ifdef LOGGING
             log_buf << ">#< changing putting " << key << "(" << std::hex << hv.GetRaw() << std::dec << ")"
@@ -221,16 +221,16 @@ RETRY:
         log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
         Log(log_buf);
 #endif
-        auto ans = bkt->GetAncestor();
-        if (ans.has_value())
-        {
-            seg = dir.GetSegment(ans.value());
-            bkt = &seg->buckets[hv.BucketBits()];
+        // if (bkt->metainfo.has_ancestor)
+        // {
+        //     auto ans = bkt->GetAncestor();
+        //     seg = dir.GetSegment(ans);
+        //     bkt = &seg->buckets[hv.BucketBits()];
 #ifdef LOGGING
             log_buf << "Searching " << key << ": (" << seg->segment_no << ", " << hv.BucketBits() << ")\n";
             Log(log_buf);
 #endif
-        }
+        // }
 #ifdef LOGGING
         logger.Write(log_buf.str());
 #endif
@@ -317,7 +317,7 @@ RETRY:
             {
                 if (dir.GetSegment(i)->buckets[j].HasAncestor())
                 {
-                    meta_buf << std::setw(2) << dir.GetSegment(i)->buckets[j].GetAncestor().value() << " ";
+                    meta_buf << std::setw(2) << dir.GetSegment(i)->buckets[j].GetAncestor() << " ";
                 }
                 else
                 {
@@ -483,7 +483,7 @@ RETRY:
 #endif
                 for (int i = 0; i < SEG_SIZE; i++)
                 {
-                    auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor().value() : walk_ptr->segment_no.get_ro();
+                    auto ans = walk_ptr->buckets[i].HasAncestor() ? walk_ptr->buckets[i].GetAncestor() : walk_ptr->segment_no.get_ro();
                     pre_seg->buckets[i].SetAncestor(ans);
 #ifdef LOGGING
                     if (walk_ptr->buckets[i].HasAncestor())
@@ -501,7 +501,7 @@ RETRY:
                     }
 #endif
                 }
-                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor().value() : buddy_segno);
+                pre_seg->buckets[bktbits].SetAncestor(buddy_bkt->HasAncestor() ? buddy_bkt->GetAncestor() : buddy_segno);
                 TX::run(pop, [&]() {
                     dir.AddSegment(pop, pre_seg, walk);
                 });
@@ -711,10 +711,10 @@ RETRY:
             if (root->buckets[i].HasAncestor())
             {
                 // avoid chaining
-                buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor().value());
+                buddy->buckets[i].SetAncestor(root->buckets[i].GetAncestor());
 #ifdef LOGGING
                 log << "(" << root->segment_no.get_ro() << ", " << i << ") has ancestor "
-                    << root->buckets[i].GetAncestor().value() << "\n";
+                    << root->buckets[i].GetAncestor() << "\n";
                 Log(log);
 #endif
             }
