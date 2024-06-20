@@ -1,5 +1,5 @@
-# Dalea: **D**irectory-sh**a**ring Multi**l**evel **E**xtendible **H**ash
-A persistent extendible hash which has extremely low split cost
+# Dalea: A Persistent Multi-level Extendible Hashing with Improved Tail Performance
+This is the source code of paper **Dalea: A Persistent Multi-level Extendible Hashing with Improved Tail Performance** in JCST, 2023, 38(5).
 
 # Building
 Currently building tool `canoe` is used to manage this project, which is a ruby gem requiring Ruby >= 2.7.1, please using `rvm` and `gem` to install Ruby 2.7.1 and `canoe`.
